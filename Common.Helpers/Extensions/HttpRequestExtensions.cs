@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-namespace MainDev.Common.Helpers.Extensions
+namespace Comlib.Common.Helpers.Extensions
 {
    public static class HttpRequestExtensions
     {

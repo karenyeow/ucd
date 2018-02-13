@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Common.Helpers.Connections
+namespace Comlib.Common.Helpers.Connections
 {
     public interface IApplicationConnectionProvider: IDbConnectionProvider 
     {

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace MainDev.Common.Helpers.Middlewares
+namespace Comlib.Common.Helpers.Middlewares
 {
     /// <summary>
     /// A <see cref="Stream"/> which wraps around another <see cref="Stream"/> and copies all data to a <see cref="MemoryStream"/>.

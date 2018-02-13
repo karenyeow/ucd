@@ -1,13 +1,13 @@
-﻿using Common.Helpers.Extensions;
-using MainDev.Common.Helpers.Constants;
-using MainDev.Common.Helpers.Extensions;
+﻿
+using Comlib.Common.Helpers.Constants;
+using Comlib.Common.Helpers.Extensions;
 using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace MainDev.Common.Helpers.Middlewares
+namespace Comlib.Common.Helpers.Middlewares
 {
     public class CommonHeaders
     {

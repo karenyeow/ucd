@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace MainDev.Common.Helpers.Constants
+namespace Comlib.Common.Helpers.Constants
 {
    public class APIHeaderConstants
     {

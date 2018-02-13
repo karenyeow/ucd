@@ -7,7 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
 
-namespace Common.Helpers.Email
+namespace Comlib.Common.Helpers.Email
 {
     public class OneGovEmailSender : IOneGovEmailSender
     {

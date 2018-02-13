@@ -3,7 +3,7 @@ using System.Data.Common;
 using System.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 
-namespace Common.Helpers.Connections
+namespace Comlib.Common.Helpers.Connections
 {
     public class ApplicationConnectionProvider : IApplicationConnectionProvider
     {

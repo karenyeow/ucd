@@ -1,5 +1,5 @@
 ﻿
-using MainDev.Common.Helpers.Middlewares;
+using Comlib.Common.Helpers.Middlewares;
 using Microsoft.AspNetCore.Builder;
 
 public static class IApplicationBuilderExtensions
