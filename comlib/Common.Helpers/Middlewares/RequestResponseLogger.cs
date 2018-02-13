@@ -1,5 +1,6 @@
-﻿using Common.Helpers.Connections;
+﻿
 using Dapper;
+using Comlib.Common.Helpers.Connections;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using System;
@@ -9,7 +10,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace MainDev.Common.Helpers.Middlewares
+namespace Comlib.Common.Helpers.Middlewares
 {
     public class RequestLoggingMiddleware
     {

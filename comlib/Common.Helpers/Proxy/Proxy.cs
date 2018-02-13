@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Text;
 
-namespace Common.Helpers.Proxy
+namespace Comlib.Common.Helpers.Proxy
 {
   public  class Proxy : IWebProxy
     {

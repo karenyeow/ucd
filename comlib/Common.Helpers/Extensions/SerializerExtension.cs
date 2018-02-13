@@ -8,7 +8,7 @@ using System.Text;
 using System.Xml;
 using System.Xml.Serialization;
 
-namespace Common.Helpers.Extensions
+namespace Comlib.Common.Helpers.Extensions
 {
     public enum SerializerType
     {

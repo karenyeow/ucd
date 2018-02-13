@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace MainDev.Common.Helpers.Middlewares
+namespace Comlib.Common.Helpers.Middlewares
 {
     /// <summary>
     /// Traces the request data which is read by the server.

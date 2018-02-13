@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
-namespace Common.Helpers.Extensions
+namespace Comlib.Common.Helpers.Extensions
 {
     public static  class DateTimeExtensions
     {
