@@ -13,13 +13,22 @@ namespace Comlib.Common.Helpers.Connections
             _configuration = configuration;
         }
 
+        public string ConnectionString
+        {
+            get
+            {
+                var connectionString = _configuration.GetConnectionString("Application");
+                if (string.IsNullOrEmpty(connectionString))
+                    throw new ArgumentNullException($"Cannot resolve Application connection string.");
+                return connectionString;
+            }
+        }
+
         public DbConnection Create()
         {
-            var connectionString = _configuration.GetConnectionString("Application");
-            if (string.IsNullOrEmpty(connectionString))
-                throw new ArgumentNullException($"Cannot resolve Application connection string.");
+            
 
-            var sqlConnectionBuilder = new SqlConnectionStringBuilder(connectionString);
+            var sqlConnectionBuilder = new SqlConnectionStringBuilder(this.ConnectionString);
             return new SqlConnection(sqlConnectionBuilder.ToString());
         }
 

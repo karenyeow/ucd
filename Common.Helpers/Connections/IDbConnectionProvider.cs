@@ -5,5 +5,6 @@ namespace Comlib.Common.Helpers.Connections
     public interface IDbConnectionProvider
     {
         DbConnection Create();
+        string ConnectionString { get; }
     }
 }
