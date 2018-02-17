@@ -19,6 +19,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\comlib\Common.Helpers\Common.Helpers.csproj" />
+    <ProjectReference Include="..\comlib\Common.Framework\Comlib.Common.Framework.csproj" />
+    <ProjectReference Include="..\comlib\Common.Helpers\Comlib.Common.Helpers.csproj" />
   </ItemGroup>
 
 </Project>

@@ -15,9 +15,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "UCD.Repository", "ucd.repos
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "UCD.Model", "ucd.model\UCD.Model.csproj", "{4CE600F5-843B-459B-A192-CEDA5FD798E9}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Comlib.Common.Helpers", "..\comlib\Common.Helpers\Comlib.Common.Helpers.csproj", "{E54929AF-17D7-4E62-AE2D-58C58326EE0A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Comlib.Common.Helpers", "comlib\Common.Helpers\Comlib.Common.Helpers.csproj", "{E54929AF-17D7-4E62-AE2D-58C58326EE0A}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Comlib.Common.Framework", "..\comlib\Common.Framework\Comlib.Common.Framework.csproj", "{3ADF1944-8B0B-44DA-A0B0-72E2E9199F78}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Comlib.Common.Framework", "comlib\Common.Framework\Comlib.Common.Framework.csproj", "{3ADF1944-8B0B-44DA-A0B0-72E2E9199F78}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
