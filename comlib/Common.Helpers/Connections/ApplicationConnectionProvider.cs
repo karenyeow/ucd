@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Comlib.Common.Helpers.Connections
 {
-    public class ApplicationConnectionProvider : IApplicationConnectionProvider
+ abstract    public class ApplicationConnectionProvider : IApplicationConnectionProvider
     {
         private readonly IConfiguration _configuration;
         public ApplicationConnectionProvider(IConfiguration configuration)
@@ -27,7 +27,7 @@ namespace Comlib.Common.Helpers.Connections
             }
         }
 
-        public DbConnection Create()
+        public virtual  DbConnection Create()
         {
             
 
