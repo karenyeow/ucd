@@ -8,9 +8,11 @@ using System.Text;
 
 namespace UCD.Repository
 {
-   public class UCDConnectionProvider:ApplicationConnectionProvider 
+   public class UCDConnectionProvider: DBConnectionProvider  
     {
-        public UCDConnectionProvider (I)
-      
+        public UCDConnectionProvider(IConfiguration configuration):base("UCD",DBEnum.SQL , configuration)
+        {  }
+  
+
     }
 }

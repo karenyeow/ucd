@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Common.Helpers.Connections;
-using Common.Helpers.Email;
-using MainDev.Common.Helpers.Middlewares;
+using Comlib.Common.Helpers.Connections;
+using Comlib.Common.Helpers.Email;
+using Comlib.Common.Helpers.Middlewares;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;

@@ -21,6 +21,8 @@
     <ProjectReference Include="..\..\comlib\Common.Helpers\Common.Helpers.csproj" />
     <ProjectReference Include="..\comlib\Common.Framework\Comlib.Common.Framework.csproj" />
     <ProjectReference Include="..\comlib\Common.Helpers\Comlib.Common.Helpers.csproj" />
+    <ProjectReference Include="..\ucd.model\UCD.Model.csproj" />
+    <ProjectReference Include="..\ucd.repository\UCD.Repository.csproj" />
   </ItemGroup>
 
 </Project>
