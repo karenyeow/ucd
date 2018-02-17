@@ -13,6 +13,9 @@ namespace Comlib.Common.Helpers.Connections
             _configuration = configuration;
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
         public string ConnectionString
         {
             get
@@ -32,9 +35,6 @@ namespace Comlib.Common.Helpers.Connections
             return new SqlConnection(sqlConnectionBuilder.ToString());
         }
 
-        public SqlConnection CreateSqlConnection()
-        {
-            throw new NotImplementedException();
-        }
+
     }
 }

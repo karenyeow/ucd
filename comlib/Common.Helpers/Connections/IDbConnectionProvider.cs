@@ -6,5 +6,6 @@ namespace Comlib.Common.Helpers.Connections
     {
         DbConnection Create();
         string ConnectionString { get; }
+
     }
 }
