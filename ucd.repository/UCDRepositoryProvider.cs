@@ -20,9 +20,9 @@ namespace UCD.Repository
     {
        // private readonly string _glsOnlineConnection;
         private readonly JsonSerializerSettings _ignoreDateFormat = new JsonSerializerSettings { DateParseHandling = DateParseHandling.None };
-        private readonly IDbConnectionProvider _ucdConnectionProvider;
+        private readonly IUCDConnectionProvider _ucdConnectionProvider;
 
-        public UCDRepositoryProvider(IDbConnectionProvider ucdConnectionProvider)
+        public UCDRepositoryProvider(IUCDConnectionProvider ucdConnectionProvider)
         {
             this._ucdConnectionProvider = ucdConnectionProvider;
         }

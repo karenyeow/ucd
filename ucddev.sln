@@ -7,7 +7,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "comlib", "comlib", "{EF7919
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ucd", "ucd", "{EEB9F97F-557F-4949-BC7B-EB13B076507B}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ucd.api", "ucd.api\ucd.api.csproj", "{6541BAE1-2DBC-4BFC-A5B1-CBFF08204905}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "UCD.API", "ucd.api\UCD.API.csproj", "{6541BAE1-2DBC-4BFC-A5B1-CBFF08204905}"
 EndProject
 Project("{E53339B2-1760-4266-BCC7-CA923CBCF16C}") = "docker-compose", "docker-compose.dcproj", "{7C4F59C0-373E-4208-B218-BF4D296304C0}"
 EndProject
