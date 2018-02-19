@@ -8,7 +8,7 @@ using System.Text;
 
 namespace Comlib.Common.Helpers.Connections
 {
-    public class DBConnectionProvider : IDbConnectionProvider
+    public class DBConnectionProvider : IDBConnectionProvider
     {
         private string _connectionStringName;
         private readonly IConfiguration _configuration;
