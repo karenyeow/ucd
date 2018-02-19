@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json.Serialization;
+using UCD.Repository;
 
 namespace ucd.api
 {
@@ -64,10 +65,9 @@ namespace ucd.api
 
             services.AddSingleton(_configuration).AddSingleton<IExecutionContext, ExecutionContext>();
 
-            //services.AddSingleton<IHbcfRepository, HbcfRepository>();
-            //services.AddSingleton<IHbcfConnectionProvider, HbcfConnectionProvider>();
-
-            services.AddSingleton<IApplicationConnectionProvider, ApplicationConnectionProvider>();
+            services.AddSingleton<IUCDRepository, UCDRepositoryProvider>();
+            services.AddSingleton<IUCDConnectionProvider, UCDConnectionProvider>();
+            services.AddSingleton<IAPILoggingConnectionProvider, APILoggingConnectionProvider>();
 
             services.AddTransient<IOneGovEmailSender, OneGovEmailSender>();
 
@@ -75,14 +75,66 @@ namespace ucd.api
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory, IExecutionContext executionContext)
         {
-            if (env.IsDevelopment())
+            app.ExtractCommonHeaders();
+
+            if (_hostingEnvironment.IsEnvironment("Development"))
             {
                 app.UseDeveloperExceptionPage();
             }
 
+            app.UseSetCommonHeaders();
+
+            app.UseMiddleware<RequestLoggingMiddleware>();
+
+            if (_exceptions.Any(p => p.Value.Any()))
+            {
+                app.Run(
+                    async context =>
+                    {
+                        context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                        context.Response.ContentType = "text/plain";
+
+                        foreach (var ex in _exceptions)
+                        {
+                            foreach (var val in ex.Value)
+                            {
+                                await context.Response.WriteAsync($"Error on {ex.Key}: {val.Message}").ConfigureAwait(false);
+                            }
+                        }
+                    });
+                return;
+            }
+
+            app.UseExceptionHandler(
+                builder =>
+                {
+                    builder.Run(async context =>
+                    {
+                        var error = context.Features.Get<IExceptionHandlerFeature>();
+
+                        if (error != null)
+                        {
+                            var errorObject = new
+                            {
+                                Error = error.Error.HResult.ToString(),
+                                ErrorDescription = error.Error.Message
+                            };
+
+                            context.Response.ContentType = executionContext.GetResponseContentType(context);
+                            await context.Response.WriteAsync(JsonConvert.SerializeObject(errorObject)).ConfigureAwait(false);
+
+                            await new OneGovEmailSender(_configuration).SendErrorEmailAsync(error).ConfigureAwait(false);
+                        }
+                    });
+                });
+
+            loggerFactory.AddConsole(_configuration.GetSection("Logging"));
+            loggerFactory.AddDebug();
+            loggerFactory.AddFile(_configuration.GetSection("Logging"));
             app.UseMvc();
         }
+
     }
 }
