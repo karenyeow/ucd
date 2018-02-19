@@ -15,13 +15,13 @@ namespace Comlib.Common.Helpers.Middlewares
     public class RequestLoggingMiddleware
     {
         private readonly RequestDelegate _next;
-        private readonly IDbConnectionProvider  _applicationConnectionProvider;
+        private readonly IAPILoggingConnectionProvider  _apiLoggingConnectionProvider;
         private readonly IHostingEnvironment _hostingEnvironment;
 
-        public RequestLoggingMiddleware(RequestDelegate next, IDbConnectionProvider applicationConnectionProvider, IHostingEnvironment hostingEnvironment)
+        public RequestLoggingMiddleware(RequestDelegate next, IAPILoggingConnectionProvider apiLoggingConnectionProvider, IHostingEnvironment hostingEnvironment)
         {
             _hostingEnvironment = hostingEnvironment;
-            _applicationConnectionProvider = applicationConnectionProvider;
+            _apiLoggingConnectionProvider = apiLoggingConnectionProvider;
             _next = next;
         }
 
@@ -93,7 +93,7 @@ namespace Comlib.Common.Helpers.Middlewares
                     ResponseCreated = DateTime.Now,
                 };
 
-                using (var connection = _applicationConnectionProvider.CreateSqlConnection())
+                using (var connection = _apiLoggingConnectionProvider.CreateSqlConnection())
                 {
                     try
                     {

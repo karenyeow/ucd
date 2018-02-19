@@ -3,7 +3,7 @@ using System.Data.SqlClient;
 
 namespace Comlib.Common.Helpers.Connections
 {
-    public interface IDbConnectionProvider
+    public interface IDBConnectionProvider
     {
         DbConnection CreateDBConnection();
         SqlConnection CreateSqlConnection();
