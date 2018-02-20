@@ -14,6 +14,7 @@ namespace Comlib.Common.Helpers.Constants
         public const string ResponseTimeHeaderKey = "responseTimeStamp";
         public const string RequestFromHeaderKey = "requestFrom";
         public const string ApiKeyHeaderKey = "apiKey";
+        public const string RequestIfModifiedSinceHeaderKey = "if-modified-since";
     }
 }
 
