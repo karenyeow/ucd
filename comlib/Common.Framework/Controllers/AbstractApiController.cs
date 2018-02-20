@@ -5,6 +5,7 @@ using Comlib.Common.Helpers.Email;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
 using System.Linq;
+using Comlib.Common.Helpers.Constants;
 
 namespace iCare.Api.Controllers
 {
@@ -37,6 +38,19 @@ namespace iCare.Api.Controllers
                 value = headerValues.FirstOrDefault();
             }
             return value;
+        }
+        protected void SetHeaderValuesUTC()
+        {
+            var requestedTimeStampRaw = GetHeaderValues(APIHeaderConstants.RequestTimeHeaderKey);
+            var transactionIdKey = GetHeaderValues(APIHeaderConstants.TransactionIdHeaderKey);
+            var lastModifiedTimeStampRaw = GetHeaderValues(APIHeaderConstants.RequestIfModifiedSinceHeaderKey);
+
+            Request.Headers.Clear();
+            Request.Headers.Add(APIHeaderConstants.RequestTimeHeaderKey, requestedTimeStampRaw);
+            Request.Headers.Add(APIHeaderConstants.RequestIfModifiedSinceHeaderKey, lastModifiedTimeStampRaw);
+            Request.Headers.Add(APIHeaderConstants.TransactionIdHeaderKey, transactionIdKey);
+            Request.Headers.Add(APIHeaderConstants.ResponseTimeHeaderKey, DateTime.UtcNow.ToString("yyyyMMddTHHmmss") + "Z");
+           
         }
     }
 }
