@@ -39,7 +39,20 @@ namespace iCare.Api.Controllers
             }
             return value;
         }
+        protected void SetHeaderValues()
+        {
+            _SetCommonHeaderValues();
+            Request.Headers.Add(APIHeaderConstants.ResponseTimeHeaderKey, DateTime.UtcNow.ToString("yyyyMMddTHHmmss") + "Z");
+
+        }
         protected void SetHeaderValuesUTC()
+        {
+            _SetCommonHeaderValues();
+            Request.Headers.Add(APIHeaderConstants.ResponseTimeHeaderKey, DateTime.UtcNow.ToString("yyyyMMddTHHmmss") + "Z");
+           
+        }
+
+        private void _SetCommonHeaderValues()
         {
             var requestedTimeStampRaw = GetHeaderValues(APIHeaderConstants.RequestTimeHeaderKey);
             var transactionIdKey = GetHeaderValues(APIHeaderConstants.TransactionIdHeaderKey);
@@ -49,8 +62,8 @@ namespace iCare.Api.Controllers
             Request.Headers.Add(APIHeaderConstants.RequestTimeHeaderKey, requestedTimeStampRaw);
             Request.Headers.Add(APIHeaderConstants.RequestIfModifiedSinceHeaderKey, lastModifiedTimeStampRaw);
             Request.Headers.Add(APIHeaderConstants.TransactionIdHeaderKey, transactionIdKey);
-            Request.Headers.Add(APIHeaderConstants.ResponseTimeHeaderKey, DateTime.UtcNow.ToString("yyyyMMddTHHmmss") + "Z");
-           
+
+
         }
 
 
