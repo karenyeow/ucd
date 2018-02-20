@@ -13,8 +13,9 @@ using System.Configuration;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Threading.Tasks;
+using UCD.Model.Base;
+using UCD.Model.Drools.V1;
 using UCD.Model.V1;
 using UCD.Repository;
 
@@ -112,14 +113,13 @@ namespace UCD.API.Controllers
                 var errors = this._ucdRepository.UploadClaimTransaction(this.APIKey, pirCode, this.TransactionID, claimID,
                 passTier0, JsonConvert.SerializeObject(ctpClaim, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }));
 
-                var response = _CreateResponse(claimID, ctpClaim, currentExceptions, passTier0);
-                foreach (var header in Request.Headers)
-                {
-                    response.Headers.Add(header.Key.ToString(), header.Value.ToString());
-                    
-                }
-                 Task.Factory.StartNew(() => _UnpackClaimTransaction(TransactionID, pirCode));
-                return  new OkObjectResult(response);
+                var response = _CreateResponse(claimID, ctpClaim, currentExceptions);
+ 
+                Task.Factory.StartNew(() => _UnpackClaimTransaction(TransactionID, pirCode));
+                if (passTier0)
+                    return new OkObjectResult(response);
+                else
+                    return new BadRequestObjectResult(response);
             }
             catch (Exception exception)
             {
@@ -134,30 +134,21 @@ namespace UCD.API.Controllers
             {
                 SetHeaderValues();
                 var pirCode = this.InsurerCode;
-                var ctpClaim =  this._ucdRepository.GetClaimTransaction(this.APIKey, pirCode,
-                    base.GetHeaderValues(commonHelper.Constants.TransactionIdHeaderKey),
+                var ctpClaim =  this._ucdRepository.GetClaimTransaction(this.APIKey, pirCode,this.TransactionID,
                     id,true);
-                var response = Request.CreateResponse(HttpStatusCode.OK);
-                foreach (var header in Headers)
-                {
-                    response.Headers.Add(header.Key, header.Value);
-                }
+                var response = new OkObjectResult(ctpClaim ?? string.Empty);
 
-                response.Content =
-                               new PushStreamContent(async (stream, content, context) =>
-                               {
-                                   await OnStreamAvailableAsync(stream, content, context, JsonConvert.DeserializeObject(ctpClaim==null?string.Empty: ctpClaim.ToString()));
 
-                               }, "application/json");
-                return ResponseMessage(response);
+                return response;
+
             }
             catch (Exception exception)
             {
-                return HandleException(exception);
+                return await HandleException(exception);
             }
         }
 
-      public virtual async Task<IHttpActionResult> UploadCTPPayments()
+      public virtual async Task<IActionResult> UploadCTPPayments()
         {
             try
                           
@@ -167,9 +158,9 @@ namespace UCD.API.Controllers
 
                 var pirCode = this.InsurerCode;
 
-                var rawData = await GetRawPostData();
+                var rawData =  await Request.GetRawBodyStringAsync();
 
-                
+
                 var ctpPaymentRequest = JsonConvert.DeserializeObject<PaymentRequestClass>(rawData);
                 var claimID = ctpPaymentRequest.claimID;
 
@@ -200,67 +191,58 @@ namespace UCD.API.Controllers
                     passTier0 = true;
                 }
 
-                this._ucdRepository.UploadPaymentTransaction(base.APIKey, pirCode, base.GetHeaderValues(commonHelper.Constants.TransactionIdHeaderKey), claimID,
+                this._ucdRepository.UploadPaymentTransaction(this.APIKey, pirCode,this.TransactionID, claimID,
                 passTier0, JsonConvert.SerializeObject(ctpPaymentRequest, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }));
+ 
+                var response = _CreateResponse(claimID, ctpPaymentRequest, currentExceptions);
 
-                var response = _CreateResponse(claimID, ctpPaymentRequest, currentExceptions, passTier0);
-                foreach (var header in Headers)
-                {
-                    response.Headers.Add(header.Key, header.Value);
-                }
 
                 Task.Factory.StartNew(() => _UnpackPaymentTransaction(TransactionID,pirCode ));
-                return ResponseMessage(response);
+
+                if (passTier0)
+                    return new OkObjectResult(response);
+                else
+                    return new BadRequestObjectResult(response);
             }
             catch (Exception exception)
             {
-                return HandleException(exception);
+                return await  HandleException(exception);
             }
         }
 
-        public virtual async Task<IHttpActionResult> GetCTPPayment(string id)
+        public virtual async Task<IActionResult> GetCTPPayment(string id)
         {
             try
             {
      
                 SetHeaderValues();
                 var pirCode = this.InsurerCode;
-                var ctpPayments = this._ucdRepository.GetPaymentTransaction(this.APIKey, pirCode,
-                    base.GetHeaderValues(commonHelper.Constants.TransactionIdHeaderKey),
+                var ctpPayments = this._ucdRepository.GetPaymentTransaction(this.APIKey, pirCode, this.TransactionID,
                     id);
-                var response = Request.CreateResponse(HttpStatusCode.OK);
-                foreach (var header in Headers)
-                {
-                    response.Headers.Add(header.Key, header.Value);
-                }
 
-                response.Content =
-                               new PushStreamContent(async (stream, content, context) =>
-                               {
-                                   await OnStreamAvailableAsync(stream, content, context, JsonConvert.DeserializeObject(ctpPayments == null ? string.Empty : ctpPayments.ToString()));
 
-                               }, "application/json");
-                return ResponseMessage(response);
+                return ctpPayments == null ? new OkObjectResult("") : new OkObjectResult(ctpPayments);
+               
             }
             catch (Exception exception)
             {
-                return HandleException(exception);
+                return await HandleException(exception);
             }
         }
 
-        public virtual async Task<IHttpActionResult> SearchCTPClaims()
+        public virtual async Task<IActionResult> SearchCTPClaims()
         {
             try
             {
                 SetHeaderValuesUTC();
 
-                var rawData = await GetRawPostData();
+                var rawData = await Request.GetRawBodyStringAsync();
 
 
                 var claimSearchRequest  = JsonConvert.DeserializeObject<ClaimSearchRequestClass>(rawData);
 
 
-                var claimsResult = this._ucdRepository.SearchClaims(this.TransactionID, this.APIKey , this.InsurerCode, claimSearchRequest.claim.claimID, claimSearchRequest.searchScope.includeNullClaim, claimSearchRequest.searchScope.minTier.HasValue?claimSearchRequest.searchScope.minTier.Value: 0, JsonConvert.SerializeObject(claimSearchRequest, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }));
+                var claimsResult = this._ucdRepository.SearchClaims(this.TransactionID, this.APIKey , this.InsurerCode, claimSearchRequest.claim.claimID, claimSearchRequest.searchScope.includeNullClaim, claimSearchRequest.searchScope.minTier ?? 0, JsonConvert.SerializeObject(claimSearchRequest, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }));
 
 
                 var claimsSearchResult = new ClaimSearchResponseClass();
@@ -280,33 +262,28 @@ namespace UCD.API.Controllers
 
                 }
 
-
-            
-                var response = Request.CreateResponse(HttpStatusCode.OK, claimsSearchResult, new JsonMediaTypeFormatter() { SerializerSettings = new JsonSerializerSettings() { NullValueHandling = NullValueHandling.Ignore } });
-                foreach (var header in Headers)
-                {
-                    response.Headers.Add(header.Key, header.Value);
-                }
-              
-                return ResponseMessage(response);
+                return new OkObjectResult(claimsSearchResult);
+         
+        
             }
             catch (Exception exception)
             {
-                return HandleException(exception);
+                return await HandleException(exception);
             }
         }
 
 
 
-        public virtual async Task<IHttpActionResult> ClearException()
+        public virtual async Task<IActionResult> ClearException()
         {
             try
             {
                 SetHeaderValuesUTC();
 
-                var rawData = await GetRawPostData();
+                var rawData = await Request.GetRawBodyStringAsync();
 
-               
+
+
 
                 var clearExceptionRequest = JsonConvert.DeserializeObject<ClearExceptionRequestClass>(rawData);
 
@@ -317,48 +294,32 @@ namespace UCD.API.Controllers
                 }
 
 
-
-
-                var response = Request.CreateResponse(HttpStatusCode.OK);
-                foreach (var header in Headers)
-                {
-                    response.Headers.Add(header.Key, header.Value);
-                }
-
-                return ResponseMessage(response);
-            }
+                return new OkObjectResult("");            }
             catch (Exception exception)
             {
-                return HandleException(exception);
+                return  await HandleException(exception);
             }
 
         }
 
-        private HttpResponseMessage _CreateResponse(string id, ClaimRequestClass request, List<ExceptionClass> openExceptions, bool passTier0)
+        private ClaimResponseClass _CreateResponse(string id, ClaimRequestClass request, List<ExceptionClass> openExceptions)
         {
             HttpStatusCode httpStatus;
             var response = new ClaimResponseClass()
             {
                 claimID = id,
                 providerProcessedDateTime = request.providerProcessedDateTime,
-                submissionID = base.TransactionID,
-                receivedDateTime = Headers[ICPWeb.CommonV2.Helper.Constants.ResponseTimeHeaderKey],
+                submissionID = this.TransactionID,
+                receivedDateTime = Response.Headers[APIHeaderConstants.ResponseTimeHeaderKey], 
                 claim  = request.claim  
-                //payment = null
+  
 
             };
-            if (passTier0)
-            {
-                httpStatus = HttpStatusCode.OK;
-            }
-            else
-            {
-                httpStatus = HttpStatusCode.BadRequest;
-            }
-            response.exception = new List<ResponseExceptionClass>();
+      
+            response.exception = new List<Model.Base.ResponseExceptionClass>();
             foreach (var openEx in openExceptions)
             {
-                response.exception.Add(new ResponseExceptionClass()
+                response.exception.Add(new Model.Base.ResponseExceptionClass()
                 {
                     description = openEx.description,
                     exceptionID = openEx.sequenceID,
@@ -371,38 +332,30 @@ namespace UCD.API.Controllers
 
                 });
             }
-            
-            return Request.CreateResponse(httpStatus, response, new JsonMediaTypeFormatter() { SerializerSettings = new JsonSerializerSettings() { NullValueHandling = NullValueHandling.Ignore } });
+            return response;;
 
 
 
 
         }
 
-        private HttpResponseMessage _CreateResponse(string id, PaymentRequestClass  request, List<ExceptionClass> openExceptions, bool passTier0)
+        private PaymentResponseClass _CreateResponse(string id, PaymentRequestClass  request, List<ExceptionClass> openExceptions)
         {
-            HttpStatusCode httpStatus;
+
             var response = new PaymentResponseClass()
             {
                 claimID = id,
                 providerProcessedDateTime = request.providerProcessedDateTime,
-                submissionID = base.TransactionID,
-                receivedDateTime = Headers[ICPWeb.CommonV2.Helper.Constants.ResponseTimeHeaderKey],
+                submissionID = this.TransactionID,
+                receivedDateTime =Response.Headers[APIHeaderConstants.ResponseTimeHeaderKey], 
                 payment = request.payment 
 
             };
-            if (passTier0)
-            {
-                httpStatus = HttpStatusCode.OK;
-            }
-            else
-            {
-                httpStatus = HttpStatusCode.BadRequest;
-            }
-            response.exception = new List<ResponseExceptionClass>();
+ 
+            response.exception = new List<Model.Base.ResponseExceptionClass>();
             foreach (var openEx in openExceptions)
             {
-                response.exception.Add(new ResponseExceptionClass()
+                response.exception.Add(new Model.Base.ResponseExceptionClass()
                 {
                     description = openEx.description,
                     exceptionID = openEx.sequenceID,
@@ -415,23 +368,15 @@ namespace UCD.API.Controllers
 
                 });
             }
-            
 
-
-            return Request.CreateResponse(httpStatus, response, new JsonMediaTypeFormatter() { SerializerSettings = new JsonSerializerSettings() { NullValueHandling = NullValueHandling.Ignore } });
-         
-
-           
-
-
-
-
+            return response;
         }
         private void _ValidateTier0(string transactionID,string claimID, ClaimRequestClass request, List<ExceptionClass> openExceptions)
         {
-            List<Task> tasks = new List<Task>();
-
-            tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<ClaimRequestClass>(transactionID, CTPCLAIMEXCEPTIONTYPE,"", claimID, request, openExceptions)));
+            List<Task> tasks = new List<Task>
+            {
+                Task.Factory.StartNew(() => this._ValidateTier0<ClaimRequestClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "", claimID, request, openExceptions))
+            };
             if (request.claim != null)
             {
 
@@ -478,9 +423,11 @@ namespace UCD.API.Controllers
 
         private void _ValidateTier0(string transactionID, string claimID, PaymentRequestClass  request, List<ExceptionClass> openExceptions)
         {
-     
-            List<Task> tasks = new List<Task>();
-            tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<PaymentRequestClass>(transactionID, CTPPAYMENTEXCEPTIONTYPE, "", claimID, request, openExceptions)));
+
+            List<Task> tasks = new List<Task>
+            {
+                Task.Factory.StartNew(() => this._ValidateTier0<PaymentRequestClass>(transactionID, CTPPAYMENTEXCEPTIONTYPE, "", claimID, request, openExceptions))
+            };
             if (request.payment!= null)
             {
                 tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<PaymentClass>(transactionID, CTPPAYMENTEXCEPTIONTYPE, "payment", claimID, request.payment, openExceptions)));
@@ -514,7 +461,7 @@ namespace UCD.API.Controllers
             }
             catch (Exception exception)
             {
-                 HandleException(exception);
+              
                 throw exception;
             }
 
@@ -548,7 +495,7 @@ namespace UCD.API.Controllers
             }
             catch (Exception exception)
             {
-                HandleException(exception);
+                //HandleException(exception);
                 throw exception;
             }
        
@@ -586,7 +533,7 @@ namespace UCD.API.Controllers
 
 
 
-        private void _InsertNewErrors(string transactionID,string ctpExceptionType,string claimID, List<Models.Drools.BaseResponseValueClass> newErrors, List<ExceptionClass> existingExceptions, bool isDrools)
+        private void _InsertNewErrors(string transactionID,string ctpExceptionType,string claimID, List<BaseResponseValueClass> newErrors, List<ExceptionClass> existingExceptions, bool isDrools)
         {
             foreach (var newError in newErrors)
             {
@@ -605,7 +552,7 @@ namespace UCD.API.Controllers
 
 
 
-        private void _InsertNewErrors(string transactionID, string ctpExceptionType,string claimID, Models.Drools.ClaimResponseValueClass newError, List<ExceptionClass> existingExceptions, bool isDrools)
+        private void _InsertNewErrors(string transactionID, string ctpExceptionType,string claimID, ClaimResponseValueClass newError, List<ExceptionClass> existingExceptions, bool isDrools)
         {
 
 
@@ -676,7 +623,7 @@ namespace UCD.API.Controllers
 
 
         }
-        private void _CloseExistingErrors(string transactionID, string claimID, List<Models.Drools.BaseResponseValueClass> newErrors, List<ExceptionClass> existingExceptions, bool isDrools)
+        private void _CloseExistingErrors(string transactionID, string claimID, List<BaseResponseValueClass> newErrors, List<ExceptionClass> existingExceptions, bool isDrools)
         {
 
             var existingNodeErrors = existingExceptions.Where(x => x.tier > 0 && x.isDrools == isDrools).ToList();
@@ -693,7 +640,7 @@ namespace UCD.API.Controllers
 
         }
 
-        private void _CloseExistingErrors(string transactionID, string claimID,int index, List<Models.Drools.BaseResponseValueClass> newErrors, List<ExceptionClass> existingExceptions, bool isDrools)
+        private void _CloseExistingErrors(string transactionID, string claimID,int index, List<BaseResponseValueClass> newErrors, List<ExceptionClass> existingExceptions, bool isDrools)
         {
             var existingNodeErrors = existingExceptions.Where(x => x.tier > 0 &&  x.index == index &&   x.isDrools == isDrools).ToList();
             if (existingNodeErrors.Count == 0) return;
@@ -731,13 +678,15 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
         }
         private void _ValidateOtherTiers(string transactionID,string pirCode,string claimID, ClaimRequestClass request, List<ExceptionClass> openExceptions)
         {
-            List<Task> tasks = new List<Task>();
-            tasks.Add(Task.Factory.StartNew(() => this._ValidateWithDrools(transactionID, claimID, request,openExceptions)));
-           tasks.Add(Task.Factory.StartNew(() => this._ValidateIsSiraRefNumUnique(transactionID, pirCode, claimID, request, openExceptions)));
-          tasks.Add(Task.Factory.StartNew(() => this._ValidateIsNomDefRefNumUnique(transactionID, claimID, pirCode, request.claim.nomDefRefNum,openExceptions)));
-            tasks.Add(Task.Factory.StartNew(() => this._ValidateNullClaimIndEqualsYGrossAmountEquals0(transactionID, claimID, pirCode, request.claim.nullClaimInd, openExceptions)));
-            tasks.Add(Task.Factory.StartNew(() => this._ValidateNullClaimIndEqualsYNetAmountEquals0(transactionID, claimID, pirCode, request.claim.nullClaimInd, openExceptions)));
-            tasks.Add(Task.Factory.StartNew(() => this._ValidateIsAccidentEventNumUnique(transactionID, claimID, pirCode,request , openExceptions)));
+            List<Task> tasks = new List<Task>
+            {
+                Task.Factory.StartNew(() => this._ValidateWithDrools(transactionID, claimID, request, openExceptions)),
+                Task.Factory.StartNew(() => this._ValidateIsSiraRefNumUnique(transactionID, pirCode, claimID, request, openExceptions)),
+                Task.Factory.StartNew(() => this._ValidateIsNomDefRefNumUnique(transactionID, claimID, pirCode, request.claim.nomDefRefNum, openExceptions)),
+                Task.Factory.StartNew(() => this._ValidateNullClaimIndEqualsYGrossAmountEquals0(transactionID, claimID, pirCode, request.claim.nullClaimInd, openExceptions)),
+                Task.Factory.StartNew(() => this._ValidateNullClaimIndEqualsYNetAmountEquals0(transactionID, claimID, pirCode, request.claim.nullClaimInd, openExceptions)),
+                Task.Factory.StartNew(() => this._ValidateIsAccidentEventNumUnique(transactionID, claimID, pirCode, request, openExceptions))
+            };
 
             try
             {
@@ -753,12 +702,11 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
 
         private void _ValidateOtherTiers(string transactionID, string pirCode, string claimID, PaymentRequestClass paymentRequest, ClaimRequestClass claimRequest, List<ExceptionClass> openExceptions)
         {
-            List<Task> tasks = new List<Task>();
-
-
-
-            tasks.Add(Task.Factory.StartNew(() => this._ValidateWithDrools(transactionID, claimID, paymentRequest,claimRequest, openExceptions)));
-                  tasks.Add(Task.Factory.StartNew(() => this._ValidateOrigTranIdExists(transactionID,claimID, pirCode, paymentRequest, openExceptions)));
+            List<Task> tasks = new List<Task>
+            {
+                Task.Factory.StartNew(() => this._ValidateWithDrools(transactionID, claimID, paymentRequest, claimRequest, openExceptions)),
+                Task.Factory.StartNew(() => this._ValidateOrigTranIdExists(transactionID, claimID, pirCode, paymentRequest, openExceptions))
+            };
             try
             {
                 Task.WaitAll(tasks.ToArray());
@@ -783,14 +731,14 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
                 }
                 else
                 {
-                    Models.Drools.ClaimResponseValueClass newError = new Models.Drools.ClaimResponseValueClass { ResponseException = new Models.Drools.ResponseExceptionClass() { Rule = "90.1", ShortDescription = "SiraRefNum must be unique for a claim", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Warning" } };
+                    ClaimResponseValueClass newError = new ClaimResponseValueClass { ResponseException = new Model.Drools.V1.ResponseExceptionClass() { Rule = "90.1", ShortDescription = "SiraRefNum must be unique for a claim", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Warning" } };
                     this._InsertNewErrors(transactionID, CTPCLAIMEXCEPTIONTYPE, claimID, newError, openExceptions, false);
                 }
 
             }
             catch (Exception exception)
             {
-                HandleException(exception);
+                //HandleException(exception);
                 throw exception;
             }
 
@@ -810,7 +758,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
                 }
                 else
                 {
-                    Models.Drools.ClaimResponseValueClass newError = new Models.Drools.ClaimResponseValueClass { ResponseException = new Models.Drools.ResponseExceptionClass() { Rule = "137.2", ShortDescription = "NomDefRefNum must be unique", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Warning" } };
+                    ClaimResponseValueClass newError = new ClaimResponseValueClass { ResponseException = new Model.Drools.V1.ResponseExceptionClass() { Rule = "137.2", ShortDescription = "NomDefRefNum must be unique", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Warning" } };
                     this._InsertNewErrors(transactionID, CTPCLAIMEXCEPTIONTYPE, claimID, newError, openExceptions, false);
                 }
             }
@@ -839,7 +787,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
                 }
                 else
                 {
-                    Models.Drools.ClaimResponseValueClass newError = new Models.Drools.ClaimResponseValueClass { ResponseException = new Models.Drools.ResponseExceptionClass() { Rule = "298.4", ShortDescription = "nullClaimInd cannot by Y. Payment gross amount not equal to 0", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Warning" } };
+                    ClaimResponseValueClass newError = new ClaimResponseValueClass { ResponseException = new Model.Drools.V1.ResponseExceptionClass() { Rule = "298.4", ShortDescription = "nullClaimInd cannot by Y. Payment gross amount not equal to 0", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Warning" } };
                     this._InsertNewErrors(transactionID, CTPCLAIMEXCEPTIONTYPE, claimID, newError, openExceptions, false);
                 }
             }
@@ -869,7 +817,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
                 }
                 else
                 {
-                    Models.Drools.ClaimResponseValueClass newError = new Models.Drools.ClaimResponseValueClass { ResponseException = new Models.Drools.ResponseExceptionClass() { Rule = "298.5", ShortDescription = "nullClaimInd cannot by Y. Net gross amount not equal to 0", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Warning" } };
+                    ClaimResponseValueClass newError = new ClaimResponseValueClass { ResponseException = new Model.Drools.V1.ResponseExceptionClass() { Rule = "298.5", ShortDescription = "nullClaimInd cannot by Y. Net gross amount not equal to 0", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Warning" } };
                     this._InsertNewErrors(transactionID, CTPCLAIMEXCEPTIONTYPE, claimID, newError, openExceptions, false);
                 }
             }
@@ -895,7 +843,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
                 }
                 else
                 {
-                    Models.Drools.ClaimResponseValueClass newError = new Models.Drools.ClaimResponseValueClass { ResponseException = new Models.Drools.ResponseExceptionClass() { Rule = "186.1", ShortDescription = "EventNum must be unique", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Warning" } };
+                    ClaimResponseValueClass newError = new ClaimResponseValueClass { ResponseException = new Model.Drools.V1.ResponseExceptionClass() { Rule = "186.1", ShortDescription = "EventNum must be unique", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Warning" } };
                     this._InsertNewErrors(transactionID, CTPCLAIMEXCEPTIONTYPE, claimID, newError, openExceptions, false);
                 }
             }
@@ -921,7 +869,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
                     }
                     else
                     {
-                        Models.Drools.ClaimResponseValueClass newError = new Models.Drools.ClaimResponseValueClass { ResponseException = new Models.Drools.ResponseExceptionClass() { Rule = "309.2", ShortDescription = "originalTransactionID must exists", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Error", exceptionReference= payment.transactionID  } };
+                        ClaimResponseValueClass newError = new ClaimResponseValueClass { ResponseException = new Model.Drools.V1.ResponseExceptionClass() { Rule = "309.2", ShortDescription = "originalTransactionID must exists", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Error", exceptionReference= payment.transactionID  } };
                         this._InsertNewErrors(transactionID, CTPPAYMENTEXCEPTIONTYPE, claimID, newError, openExceptions, false);
                     }
                 }
@@ -940,14 +888,14 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
 
                 var apiRequest = _CreateWebRequest("claimEndPoint");
 
-                var droolsRequest = new Models.Drools.RequestClass();
+                var droolsRequest = new Model.Drools.V1.RequestClass();
                 //var javaUtilDate = request.providerProcessedDateTime.ParseIso8601("yyyyMMdd'T'HHmmss'Z'").Value.ToString("yyyy-MM-dd");
                 var javaUtilDate = request.providerProcessedDateTime.ParseIso8601("yyyyMMdd'T'HHmmss'Z'").Value.Date.ToString("yyyyMMddTHHmmss") + "Z";
-                droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { SetGlobalCommand = new Models.Drools.SetGlobalCommandClass() { JavaUtilDateCommand = new Models.Drools.JavaUtilDateCommandClass() { JavaUtilDate = javaUtilDate } } });
-                // droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { InsertCommand = new Models.Drools.InsertCommandClass() { ReturnObject=true,  OutIdentifier = "inValue", InsertObject = new Models.Drools.InsertObjectCommandClass() { Claim = request.claim } } });
-                droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { InsertCommand = new Models.Drools.InsertCTPClaimCommandClass() { InsertObject = new Models.Drools.InsertCTPClaimObjCommandClass() { Claim = request.claim } } });
-                droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { FireAllRules = string.Empty });
-                droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { GetObjects = new Models.Drools.GetObjectsCommandClass() });
+                droolsRequest.commands.Add(new Model.Drools.V1.RequestCommandClass() { SetGlobalCommand = new Model.Drools.V1.SetGlobalCommandClass() { JavaUtilDateCommand = new Model.Drools.V1.JavaUtilDateCommandClass() { JavaUtilDate = javaUtilDate } } });
+                // droolsRequest.commands.Add(new Model.Drools.V1.RequestCommandClass() { InsertCommand = new Model.Drools.V1.InsertCommandClass() { ReturnObject=true,  OutIdentifier = "inValue", InsertObject = new Model.Drools.V1.InsertObjectCommandClass() { Claim = request.claim } } });
+                droolsRequest.commands.Add(new Model.Drools.V1.RequestCommandClass() { InsertCommand = new Model.Drools.V1.InsertCTPClaimCommandClass() { InsertObject = new Model.Drools.V1.InsertCTPClaimObjCommandClass() { Claim = request.claim } } });
+                droolsRequest.commands.Add(new Model.Drools.V1.RequestCommandClass() { FireAllRules = string.Empty });
+                droolsRequest.commands.Add(new Model.Drools.V1.RequestCommandClass() { GetObjects = new Model.Drools.V1.GetObjectsCommandClass() });
                 var jsonString = JsonConvert.SerializeObject(droolsRequest, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
 
                 var responseString = string.Empty;
@@ -965,7 +913,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
                         responseString = streamReader.ReadToEnd();
                     }
                 }
-                var response = JsonConvert.DeserializeObject<Models.Drools.ResponseClass>(responseString);
+                var response = JsonConvert.DeserializeObject<Model.Drools.V1.ResponseClass>(responseString);
 
                 if (response.Type.ToUpper().Trim() == "FAILURE")
                 {
@@ -979,10 +927,10 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
                     this._CloseExistingErrors(transactionID, openExceptions, true);
                     return;
                 }
-                var droolExceptions = new List<Models.Drools.BaseResponseValueClass>();
+                var droolExceptions = new List<Model.Drools.V1.BaseResponseValueClass>();
                 for (int i = 0; i <= result.Value.Count - 1; i++)
                 {
-                    var droolException = result.Value[i].ToObject<Models.Drools.ClaimResponseValueClass>();
+                    var droolException = result.Value[i].ToObject<Model.Drools.V1.ClaimResponseValueClass>();
                     if (droolException.ResponseException == null) continue;
                     droolExceptions.Add(droolException);
 
@@ -1009,23 +957,23 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
 
             try {
                 int index = 0;
-                var droolExceptions = new List<Models.Drools.BaseResponseValueClass>();
+                var droolExceptions = new List<Model.Drools.V1.BaseResponseValueClass>();
 
                 foreach (var payment in paymentRequest.payment)
                 {
 
-                    var droolsRequest = new Models.Drools.RequestClass();
+                    var droolsRequest = new Model.Drools.V1.RequestClass();
                     //var javaUtilDate = request.providerProcessedDateTime.ParseIso8601("yyyyMMdd'T'HHmmss'Z'").Value.ToString("yyyy-MM-dd");
                     var javaUtilDate = paymentRequest.providerProcessedDateTime.ParseIso8601("yyyyMMdd'T'HHmmss'Z'").Value.Date.ToString("yyyyMMddTHHmmss") + "Z";
-                    droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { SetGlobalCommand = new Models.Drools.SetGlobalCommandClass() { JavaUtilDateCommand = new Models.Drools.JavaUtilDateCommandClass() { JavaUtilDate = javaUtilDate } } });
-                    // droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { InsertCommand = new Models.Drools.InsertCommandClass() { ReturnObject=true,  OutIdentifier = "inValue", InsertObject = new Models.Drools.InsertObjectCommandClass() { Claim = request.claim } } });
-                    droolsRequest.commands.Add(new Models.Drools.RequestCommandClass()
+                    droolsRequest.commands.Add(new Model.Drools.V1.RequestCommandClass() { SetGlobalCommand = new Model.Drools.V1.SetGlobalCommandClass() { JavaUtilDateCommand = new Model.Drools.V1.JavaUtilDateCommandClass() { JavaUtilDate = javaUtilDate } } });
+                    // droolsRequest.commands.Add(new Model.Drools.V1.RequestCommandClass() { InsertCommand = new Model.Drools.V1.InsertCommandClass() { ReturnObject=true,  OutIdentifier = "inValue", InsertObject = new Model.Drools.V1.InsertObjectCommandClass() { Claim = request.claim } } });
+                    droolsRequest.commands.Add(new Model.Drools.V1.RequestCommandClass()
                     {
-                        InsertCommand = new Models.Drools.InsertCTPClaimPayCommandClass()
+                        InsertCommand = new Model.Drools.V1.InsertCTPClaimPayCommandClass()
                         {
-                            InsertObject = new Models.Drools.InsertCTPClaimPayObjCommandClass()
+                            InsertObject = new Model.Drools.V1.InsertCTPClaimPayObjCommandClass()
                             {
-                                paymentPayload = new Models.Drools.InsertCTPPayPayloadObjCommandClass()
+                                paymentPayload = new Model.Drools.V1.InsertCTPPayPayloadObjCommandClass()
                                 {
                                     Payment = payment,
                                     Claim = claimRequest.claim
@@ -1033,8 +981,8 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
                             }
                         }
                     });
-                    droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { FireAllRules = string.Empty });
-                    droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { GetObjects = new Models.Drools.GetObjectsCommandClass() { OutIdentifier = string.Empty } });
+                    droolsRequest.commands.Add(new Model.Drools.V1.RequestCommandClass() { FireAllRules = string.Empty });
+                    droolsRequest.commands.Add(new Model.Drools.V1.RequestCommandClass() { GetObjects = new Model.Drools.V1.GetObjectsCommandClass() { OutIdentifier = string.Empty } });
                     var jsonString = JsonConvert.SerializeObject(droolsRequest, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
 
                     var responseString = string.Empty;
@@ -1053,7 +1001,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
                             responseString = streamReader.ReadToEnd();
                         }
                     }
-                    var response = JsonConvert.DeserializeObject<Models.Drools.ResponseClass>(responseString);
+                    var response = JsonConvert.DeserializeObject<Model.Drools.V1.ResponseClass>(responseString);
 
                     if (response.Type.ToUpper().Trim() == "FAILURE")
                     {
@@ -1070,7 +1018,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
 
                     for (int i = 0; i <= result.Value.Count - 1; i++)
                     {
-                        var droolException = result.Value[i].ToObject<Models.Drools.PaymentResponseValueClass>();
+                        var droolException = result.Value[i].ToObject<Model.Drools.V1.PaymentResponseValueClass>();
                         if (droolException.ResponseException == null) continue;
                         if (droolExceptions.Exists(x => x.ResponseException.Rule == droolException.ResponseException.Rule && x.ResponseException.exceptionReference == droolException.ResponseException.exceptionReference)) continue;
                         droolExceptions.Add(droolException);
@@ -1111,7 +1059,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
 
         private ClaimRequestClass _GetClaimRequest(string claimID)
         {
-            var ctpClaim = this._ucdRepository.GetClaimTransaction(this.APIKey, this.InsurerCode, base.GetHeaderValues(commonHelper.Constants.TransactionIdHeaderKey),
+            var ctpClaim = this._ucdRepository.GetClaimTransaction(this.APIKey, this.InsurerCode, this.TransactionID,
 claimID, false);
             if (ctpClaim == null) return null;
 

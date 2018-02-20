@@ -25,4 +25,9 @@
 [assembly: System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "<Pending>", Scope = "member", Target = "~P:UCD.Model.V1.SearchClaimResultClass.providerSnapshotDateTime")]
 [assembly: System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "<Pending>", Scope = "member", Target = "~P:UCD.Model.V1.SearchClaimResultClass.receivedDateTime")]
 [assembly: System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "<Pending>", Scope = "member", Target = "~P:UCD.Model.V1.ClearExceptionRequestClass.exceptionID")]
+[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "<Pending>", Scope = "member", Target = "~P:UCD.Model.Drools.V1.InsertCTPClaimPayObjCommandClass.paymentPayload")]
+[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "<Pending>", Scope = "member", Target = "~P:UCD.Model.Drools.V1.RequestClass.lookup")]
+[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "<Pending>", Scope = "member", Target = "~P:UCD.Model.Drools.V1.RequestClass.commands")]
+[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "<Pending>", Scope = "member", Target = "~P:UCD.Model.Drools.V1.ResponseExceptionClass.exceptionReference")]
+[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "<Pending>", Scope = "member", Target = "~P:UCD.Model.Drools.V1.SetGlobalCommandClass.identifier")]
 
