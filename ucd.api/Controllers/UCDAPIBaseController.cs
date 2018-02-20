@@ -1,0 +1,1152 @@
+﻿using Comlib.Common.Helpers.Constants;
+using Comlib.Common.Helpers.Email;
+using Comlib.Common.Helpers.Extensions;
+using iCare.Api.Controllers;
+using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.ComponentModel.DataAnnotations;
+using System.Configuration;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading.Tasks;
+using UCD.Model.V1;
+using UCD.Repository;
+
+namespace UCD.API.Controllers
+{
+
+    public class UCDAPIBaseController : AbstractApiController
+    {
+        protected readonly IUCDRepository _ucdRepository;
+        public UCDAPIBaseController (IUCDRepository ucdRepository, IOneGovEmailSender onegovEmailSender): base(onegovEmailSender)
+        {
+            _ucdRepository = ucdRepository;
+        }
+    
+        private const string CTPCLAIMEXCEPTIONTYPE = "CTPClaim";
+        private const string CTPPAYMENTEXCEPTIONTYPE = "CTPPayment";
+        private List<SLAReferenceDataClass> _SLAReferenceData;
+        public List<SLAReferenceDataClass> SLAReferenceData
+        {
+            get
+            {
+                if (this._SLAReferenceData == null)
+                {
+                    this._SLAReferenceData = this._ucdRepository.GetSLAReferenceData();
+                }
+                return this._SLAReferenceData;
+
+            }
+        }
+
+
+        private string _insurerCode;
+        public string  InsurerCode
+        {
+            get
+            {
+                if (this._insurerCode == null)
+                {
+                    this._insurerCode = GetHeaderValues("insurerCode");
+                }
+                return this._insurerCode;
+
+            }
+        }
+
+        private string _apiKey;
+       public  string APIKey
+        {
+            get
+            {
+                if (this._apiKey.IsNullOrEmptyAfterTrim()) _apiKey = GetHeaderValues(APIHeaderConstants.ApiKeyHeaderKey);
+                return this._apiKey;
+            }
+        }
+        private string _transactionID;
+        protected string TransactionID
+        {
+            get
+            {
+                if (this._transactionID.IsNullOrEmptyAfterTrim()) _transactionID = GetHeaderValues(APIHeaderConstants.TransactionIdHeaderKey);
+                return this._transactionID;
+            }
+        }
+
+        public virtual async Task<IActionResult> UploadCTPClaim()
+        {
+            try
+            {
+                SetHeaderValuesUTC();
+
+                var pirCode = this.InsurerCode;
+
+                var rawData = await Request.GetRawBodyStringAsync();
+
+
+                var ctpClaim = JsonConvert.DeserializeObject<ClaimRequestClass>(rawData);
+               var  claimID = ctpClaim.claim.claimID;
+
+                ctpClaim.claim.managingInsCode = pirCode;
+                //Get Proc  to retrieve existing proc
+                var existingExceptions = this._ucdRepository.GetOpenException(CTPCLAIMEXCEPTIONTYPE, this.InsurerCode, claimID);
+
+                this._ValidateTier0(this.TransactionID,claimID, ctpClaim, existingExceptions);
+
+                var currentExceptions = this._ucdRepository.GetOpenException(CTPCLAIMEXCEPTIONTYPE,this.InsurerCode, claimID);
+
+                bool passTier0 = false;
+                if (!currentExceptions.Exists(x => x.tier == 0))
+                {
+                    this._ValidateOtherTiers(this.TransactionID,pirCode, claimID, ctpClaim, existingExceptions);
+                    currentExceptions = this._ucdRepository.GetOpenException(CTPCLAIMEXCEPTIONTYPE,this.InsurerCode, claimID);
+                    passTier0 = true;
+                }
+
+                var errors = this._ucdRepository.UploadClaimTransaction(this.APIKey, pirCode, this.TransactionID, claimID,
+                passTier0, JsonConvert.SerializeObject(ctpClaim, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }));
+
+                var response = _CreateResponse(claimID, ctpClaim, currentExceptions, passTier0);
+                foreach (var header in Request.Headers)
+                {
+                    response.Headers.Add(header.Key.ToString(), header.Value.ToString());
+                    
+                }
+                 Task.Factory.StartNew(() => _UnpackClaimTransaction(TransactionID, pirCode));
+                return  new OkObjectResult(response);
+            }
+            catch (Exception exception)
+            {
+                return await HandleException(exception);
+            }
+
+        }
+
+        public virtual async Task<IActionResult> GetCTPClaim(string id)
+        {
+            try
+            {
+                SetHeaderValues();
+                var pirCode = this.InsurerCode;
+                var ctpClaim =  this._ucdRepository.GetClaimTransaction(this.APIKey, pirCode,
+                    base.GetHeaderValues(commonHelper.Constants.TransactionIdHeaderKey),
+                    id,true);
+                var response = Request.CreateResponse(HttpStatusCode.OK);
+                foreach (var header in Headers)
+                {
+                    response.Headers.Add(header.Key, header.Value);
+                }
+
+                response.Content =
+                               new PushStreamContent(async (stream, content, context) =>
+                               {
+                                   await OnStreamAvailableAsync(stream, content, context, JsonConvert.DeserializeObject(ctpClaim==null?string.Empty: ctpClaim.ToString()));
+
+                               }, "application/json");
+                return ResponseMessage(response);
+            }
+            catch (Exception exception)
+            {
+                return HandleException(exception);
+            }
+        }
+
+      public virtual async Task<IHttpActionResult> UploadCTPPayments()
+        {
+            try
+                          
+            {
+
+                SetHeaderValuesUTC();
+
+                var pirCode = this.InsurerCode;
+
+                var rawData = await GetRawPostData();
+
+                
+                var ctpPaymentRequest = JsonConvert.DeserializeObject<PaymentRequestClass>(rawData);
+                var claimID = ctpPaymentRequest.claimID;
+
+           
+                //Get Proc  to retrieve existing proc
+                var existingExceptions = this._ucdRepository.GetOpenException(CTPPAYMENTEXCEPTIONTYPE ,this.InsurerCode, claimID);
+
+                this._ValidateTier0(this.TransactionID,claimID, ctpPaymentRequest, existingExceptions);
+
+                var ctpClaim = this._GetClaimRequest(claimID);
+                if (ctpClaim == null)
+                {
+                    this._InsertClaimDoesNotExistError(this.TransactionID,CTPPAYMENTEXCEPTIONTYPE, claimID, existingExceptions,false);
+                }
+                else
+                {
+                    this._CloseExistingClaimDoesNotExistErrors(this.TransactionID,CTPPAYMENTEXCEPTIONTYPE, existingExceptions);
+                }
+
+                    var currentExceptions = this._ucdRepository.GetOpenException(CTPPAYMENTEXCEPTIONTYPE, this.InsurerCode, claimID);
+
+                bool passTier0 = false;
+                if (!currentExceptions.Exists(x => x.tier == 0))
+                {
+                    //TODO: Retrieve CTPClaim
+                    this._ValidateOtherTiers(this.TransactionID,this.InsurerCode ,claimID, ctpPaymentRequest, ctpClaim,existingExceptions);
+                    currentExceptions = this._ucdRepository.GetOpenException("", this.InsurerCode, claimID);
+                    passTier0 = true;
+                }
+
+                this._ucdRepository.UploadPaymentTransaction(base.APIKey, pirCode, base.GetHeaderValues(commonHelper.Constants.TransactionIdHeaderKey), claimID,
+                passTier0, JsonConvert.SerializeObject(ctpPaymentRequest, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }));
+
+                var response = _CreateResponse(claimID, ctpPaymentRequest, currentExceptions, passTier0);
+                foreach (var header in Headers)
+                {
+                    response.Headers.Add(header.Key, header.Value);
+                }
+
+                Task.Factory.StartNew(() => _UnpackPaymentTransaction(TransactionID,pirCode ));
+                return ResponseMessage(response);
+            }
+            catch (Exception exception)
+            {
+                return HandleException(exception);
+            }
+        }
+
+        public virtual async Task<IHttpActionResult> GetCTPPayment(string id)
+        {
+            try
+            {
+     
+                SetHeaderValues();
+                var pirCode = this.InsurerCode;
+                var ctpPayments = this._ucdRepository.GetPaymentTransaction(this.APIKey, pirCode,
+                    base.GetHeaderValues(commonHelper.Constants.TransactionIdHeaderKey),
+                    id);
+                var response = Request.CreateResponse(HttpStatusCode.OK);
+                foreach (var header in Headers)
+                {
+                    response.Headers.Add(header.Key, header.Value);
+                }
+
+                response.Content =
+                               new PushStreamContent(async (stream, content, context) =>
+                               {
+                                   await OnStreamAvailableAsync(stream, content, context, JsonConvert.DeserializeObject(ctpPayments == null ? string.Empty : ctpPayments.ToString()));
+
+                               }, "application/json");
+                return ResponseMessage(response);
+            }
+            catch (Exception exception)
+            {
+                return HandleException(exception);
+            }
+        }
+
+        public virtual async Task<IHttpActionResult> SearchCTPClaims()
+        {
+            try
+            {
+                SetHeaderValuesUTC();
+
+                var rawData = await GetRawPostData();
+
+
+                var claimSearchRequest  = JsonConvert.DeserializeObject<ClaimSearchRequestClass>(rawData);
+
+
+                var claimsResult = this._ucdRepository.SearchClaims(this.TransactionID, this.APIKey , this.InsurerCode, claimSearchRequest.claim.claimID, claimSearchRequest.searchScope.includeNullClaim, claimSearchRequest.searchScope.minTier.HasValue?claimSearchRequest.searchScope.minTier.Value: 0, JsonConvert.SerializeObject(claimSearchRequest, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }));
+
+
+                var claimsSearchResult = new ClaimSearchResponseClass();
+                var index = 1;
+                foreach (var row in claimsResult)
+                {
+                    var claimSearchResultRow = new ClaimSearchResultResponseClass()
+                    {
+                        apiReceivedDateTime = row.receivedDateTime.ToString("yyyyMMddTHHmmss") + "Z",
+                        providerSnapshotDateTime = row.providerSnapshotDateTime,
+                         managingInsCode = row.managingInsCode ,
+                          resultNum = index.ToString(),
+                          claim = JsonConvert.DeserializeObject<ClaimRequestClass>( row.JSONText?? string.Empty).claim 
+
+                    };
+                    claimsSearchResult.results.Add(claimSearchResultRow);
+
+                }
+
+
+            
+                var response = Request.CreateResponse(HttpStatusCode.OK, claimsSearchResult, new JsonMediaTypeFormatter() { SerializerSettings = new JsonSerializerSettings() { NullValueHandling = NullValueHandling.Ignore } });
+                foreach (var header in Headers)
+                {
+                    response.Headers.Add(header.Key, header.Value);
+                }
+              
+                return ResponseMessage(response);
+            }
+            catch (Exception exception)
+            {
+                return HandleException(exception);
+            }
+        }
+
+
+
+        public virtual async Task<IHttpActionResult> ClearException()
+        {
+            try
+            {
+                SetHeaderValuesUTC();
+
+                var rawData = await GetRawPostData();
+
+               
+
+                var clearExceptionRequest = JsonConvert.DeserializeObject<ClearExceptionRequestClass>(rawData);
+
+                foreach (var exceptionID in clearExceptionRequest.exceptionID)
+                {
+                            
+                    this._ucdRepository.CloseExceptionbySuppression(this.TransactionID, this.InsurerCode, exceptionID.ToInt());
+                }
+
+
+
+
+                var response = Request.CreateResponse(HttpStatusCode.OK);
+                foreach (var header in Headers)
+                {
+                    response.Headers.Add(header.Key, header.Value);
+                }
+
+                return ResponseMessage(response);
+            }
+            catch (Exception exception)
+            {
+                return HandleException(exception);
+            }
+
+        }
+
+        private HttpResponseMessage _CreateResponse(string id, ClaimRequestClass request, List<ExceptionClass> openExceptions, bool passTier0)
+        {
+            HttpStatusCode httpStatus;
+            var response = new ClaimResponseClass()
+            {
+                claimID = id,
+                providerProcessedDateTime = request.providerProcessedDateTime,
+                submissionID = base.TransactionID,
+                receivedDateTime = Headers[ICPWeb.CommonV2.Helper.Constants.ResponseTimeHeaderKey],
+                claim  = request.claim  
+                //payment = null
+
+            };
+            if (passTier0)
+            {
+                httpStatus = HttpStatusCode.OK;
+            }
+            else
+            {
+                httpStatus = HttpStatusCode.BadRequest;
+            }
+            response.exception = new List<ResponseExceptionClass>();
+            foreach (var openEx in openExceptions)
+            {
+                response.exception.Add(new ResponseExceptionClass()
+                {
+                    description = openEx.description,
+                    exceptionID = openEx.sequenceID,
+                    exceptionRaisedDateTime = openEx.exceptionRaisedDateTime.ToString("yyyyMMddTHHmmss") + "Z",
+                    regulatoryRequirementDate = openEx.regulatoryRequirementDate.ToString("yyyyMMddTHHmmss") + "Z",
+                    rule = openEx.rule,
+                    tier = openEx.tier,
+                    type = openEx.type,
+                    exceptionReference = openEx.exceptionReference
+
+                });
+            }
+            
+            return Request.CreateResponse(httpStatus, response, new JsonMediaTypeFormatter() { SerializerSettings = new JsonSerializerSettings() { NullValueHandling = NullValueHandling.Ignore } });
+
+
+
+
+        }
+
+        private HttpResponseMessage _CreateResponse(string id, PaymentRequestClass  request, List<ExceptionClass> openExceptions, bool passTier0)
+        {
+            HttpStatusCode httpStatus;
+            var response = new PaymentResponseClass()
+            {
+                claimID = id,
+                providerProcessedDateTime = request.providerProcessedDateTime,
+                submissionID = base.TransactionID,
+                receivedDateTime = Headers[ICPWeb.CommonV2.Helper.Constants.ResponseTimeHeaderKey],
+                payment = request.payment 
+
+            };
+            if (passTier0)
+            {
+                httpStatus = HttpStatusCode.OK;
+            }
+            else
+            {
+                httpStatus = HttpStatusCode.BadRequest;
+            }
+            response.exception = new List<ResponseExceptionClass>();
+            foreach (var openEx in openExceptions)
+            {
+                response.exception.Add(new ResponseExceptionClass()
+                {
+                    description = openEx.description,
+                    exceptionID = openEx.sequenceID,
+                    exceptionRaisedDateTime = openEx.exceptionRaisedDateTime.ToString("yyyyMMddTHHmmss") + "Z",
+                    regulatoryRequirementDate = openEx.regulatoryRequirementDate.ToString("yyyyMMddTHHmmss") + "Z",
+                    rule = openEx.rule,
+                    tier = openEx.tier,
+                    type = openEx.type,
+                    exceptionReference = openEx.exceptionReference 
+
+                });
+            }
+            
+
+
+            return Request.CreateResponse(httpStatus, response, new JsonMediaTypeFormatter() { SerializerSettings = new JsonSerializerSettings() { NullValueHandling = NullValueHandling.Ignore } });
+         
+
+           
+
+
+
+
+        }
+        private void _ValidateTier0(string transactionID,string claimID, ClaimRequestClass request, List<ExceptionClass> openExceptions)
+        {
+            List<Task> tasks = new List<Task>();
+
+            tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<ClaimRequestClass>(transactionID, CTPCLAIMEXCEPTIONTYPE,"", claimID, request, openExceptions)));
+            if (request.claim != null)
+            {
+
+                tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<VehicleClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "vehicle",claimID, request.claim.vehicle, openExceptions)));
+                tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<PersonClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "person",claimID, request.claim.person, openExceptions)));
+                tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<CaseEstimateClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "caseEstimate", claimID, request.claim.caseEstimate , openExceptions)));
+                tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<CertificateOfFitnessClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "certificateOfFitness", claimID, request.claim.certificateOfFitness , openExceptions)));
+                tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<EmploymentClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "employment", claimID, request.claim.employment, openExceptions)));
+                tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<SharingClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "sharing", claimID, request.claim.sharing, openExceptions)));
+                tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<CommonLawSettlementClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "commonLawSettlement", claimID, request.claim.commonLawSettlement, openExceptions)));
+                tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<InternalReviewClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "internalReview", claimID, request.claim.internalReview , openExceptions)));
+                tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<RecoveryClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "recovery", claimID, request.claim.recovery, openExceptions)));
+
+                tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<ClaimClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "claim", claimID, request.claim, openExceptions)));
+
+                if (request.claim.accident != null) tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<AccidentClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "accident", claimID, request.claim.accident, openExceptions)));
+                if (request.claim.contribNeg != null) tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<ContribNegClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "contribNeg", claimID, request.claim.contribNeg, openExceptions)));
+                if (request.claim.injury != null) tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<InjuryClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "injury", claimID, request.claim.injury, openExceptions)));
+                if (request.claim.injurySeverity != null) tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<InjurySeverityClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "injurySeverity", claimID, request.claim.injurySeverity, openExceptions)));
+                if (request.claim.minorInjury != null) tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<MinorInjuryClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "minorInjury", claimID, request.claim.minorInjury, openExceptions)));
+                if (request.claim.statutoryBenefits  != null) tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<StatutoryBenefitsClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "statutoryBenefits", claimID, request.claim.statutoryBenefits, openExceptions)));
+                if (request.claim.returnToWork != null) tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<ReturnToWorkClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "returnToWork", claimID, request.claim.returnToWork , openExceptions)));
+                if (request.claim.wpi != null) tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<WPIClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "wpi", claimID, request.claim.wpi, openExceptions)));
+                if (request.claim.earningCapacity   != null) tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<EarningCapacityClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "earningCapacity", claimID, request.claim.earningCapacity, openExceptions)));
+
+                if (request.claim.commonLaw != null) tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<CommonLawClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "commonLaw", claimID, request.claim.commonLaw, openExceptions)));
+                if (request.claim.ltcs != null) tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<LTCSClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "ltcs", claimID, request.claim.ltcs, openExceptions)));
+                if (request.claim.riskScreening != null) tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<RiskScreeningClass>(transactionID, CTPCLAIMEXCEPTIONTYPE, "riskScreening", claimID, request.claim.riskScreening, openExceptions)));
+            }
+
+
+
+            try
+            {
+                Task.WaitAll(tasks.ToArray());
+            }
+            catch (AggregateException ae)
+            {
+                throw ae;
+            }
+        }
+
+
+
+        private void _ValidateTier0(string transactionID, string claimID, PaymentRequestClass  request, List<ExceptionClass> openExceptions)
+        {
+     
+            List<Task> tasks = new List<Task>();
+            tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<PaymentRequestClass>(transactionID, CTPPAYMENTEXCEPTIONTYPE, "", claimID, request, openExceptions)));
+            if (request.payment!= null)
+            {
+                tasks.Add(Task.Factory.StartNew(() => this._ValidateTier0<PaymentClass>(transactionID, CTPPAYMENTEXCEPTIONTYPE, "payment", claimID, request.payment, openExceptions)));
+            }
+            try
+            {
+                Task.WaitAll(tasks.ToArray());
+            }
+            catch (AggregateException ae)
+            {
+                throw ae;
+            }
+        }
+            private void _ValidateTier0<T>(string transactionID, string ctpExceptionType,string dataName, string claimID, T data, List<ExceptionClass> openExceptions) where T : BaseSiraClass
+        {
+            try {
+
+                var dataerrors = new List<ValidationResult>();
+                var isValid = true;
+                List<Task> tasks = new List<Task>();
+                isValid = Validator.TryValidateObject(data, new ValidationContext(data), dataerrors, true);
+
+                if (!isValid)
+                {
+
+                    this._InsertNewErrors(transactionID, ctpExceptionType, claimID, dataName, dataerrors, openExceptions, "General");
+                }
+
+
+                _CloseExistingErrors(transactionID, dataName, dataerrors, openExceptions);
+            }
+            catch (Exception exception)
+            {
+                 HandleException(exception);
+                throw exception;
+            }
+
+
+
+        }
+
+        private void _ValidateTier0<T>(string transactionID,string ctpExceptionType, string dataName,string claimID, List<T> listOfData, List<ExceptionClass> openExceptions) where T: BaseSiraClass
+        {
+            try {
+                if (listOfData == null) return;
+                var newDataErrors = new List<ValidationResult>();
+                for (int i = 0; i < listOfData.Count; i++)
+                {
+                    var dataErrors = new List<ValidationResult>();
+                    var isValid = Validator.TryValidateObject(listOfData[i], new ValidationContext(listOfData[i]), dataErrors, true);
+                    if (!isValid)
+                    {
+
+                        foreach (var dataError in dataErrors)
+                        {
+                            if (newDataErrors.Exists(x => x.MemberNames.First() == dataError.MemberNames.First() && x.ErrorMessage == dataError.ErrorMessage)) continue;
+                            newDataErrors.Add(dataError);
+                        }
+
+                    }
+
+                }
+                this._InsertNewErrors(transactionID,ctpExceptionType, claimID, dataName, newDataErrors, openExceptions,"General");
+                this._CloseExistingErrors(transactionID, dataName, newDataErrors, openExceptions);
+            }
+            catch (Exception exception)
+            {
+                HandleException(exception);
+                throw exception;
+            }
+       
+        }
+    
+
+        private void _InsertNewErrors(string transactionID, string ctpExceptionType,string claimID, string nodeName, List<ValidationResult> newErrors, List<ExceptionClass> existingExceptions, string category )
+        {
+
+            foreach (var newError in newErrors)
+            {
+                string elementName = newError.MemberNames.First();
+                nodeName = nodeName.IsNullOrEmptyAfterTrim() ? null : nodeName;
+                if (!(existingExceptions.Exists(x => x.tier == 0 && x.node == nodeName && x.element == elementName && x.description == newError.ErrorMessage)))
+                {
+                    this._ucdRepository.UpsertException(transactionID, ctpExceptionType, this.InsurerCode, claimID, 0, "Error", string.Empty,
+                        newError.ErrorMessage, nodeName, elementName, null, null, null, false, DateTime.UtcNow, category, false);
+                }
+
+            }
+
+        }
+
+        private void _InsertClaimDoesNotExistError(string transactionID,string ctpExceptionType, string claimID, List<ExceptionClass> existingExceptions, bool isDrools)
+        {
+            if (!(existingExceptions.Exists(x => x.tier == 0 && x.description == "Claim does not exist" && x.exceptionType == ctpExceptionType)))
+            {
+                this._ucdRepository.UpsertException(transactionID, ctpExceptionType, this.InsurerCode, claimID, 0, "Error", string.Empty,
+                    "Claim does not exist","    ", "     ", null, null, null, false, DateTime.UtcNow, "General", isDrools);
+            }
+           
+
+        }
+
+
+
+
+        private void _InsertNewErrors(string transactionID,string ctpExceptionType,string claimID, List<Models.Drools.BaseResponseValueClass> newErrors, List<ExceptionClass> existingExceptions, bool isDrools)
+        {
+            foreach (var newError in newErrors)
+            {
+              
+                if (!(existingExceptions.Exists(x => x.rule == newError.ResponseException.Rule && ((newError.ResponseException.exceptionReference.IsNullOrEmptyAfterTrim() && x.exceptionReference.IsNullOrEmptyAfterTrim()) || !newError.ResponseException.exceptionReference.IsNullOrEmptyAfterTrim() && x.exceptionReference==newError.ResponseException.exceptionReference))))
+                {
+
+
+                    this._ucdRepository.UpsertException(transactionID, ctpExceptionType, this.InsurerCode, claimID, newError.ResponseException.Tier, newError.ResponseException.Type, newError.ResponseException.Rule,
+                        newError.ResponseException.ShortDescription, null, null, null, newError.ResponseException.exceptionReference, null, false, DateTime.UtcNow, newError.ResponseException.SLACategory, isDrools);
+                }
+
+            }
+
+        }
+
+
+
+        private void _InsertNewErrors(string transactionID, string ctpExceptionType,string claimID, Models.Drools.ClaimResponseValueClass newError, List<ExceptionClass> existingExceptions, bool isDrools)
+        {
+
+
+                if (!(existingExceptions.Exists(x => x.rule == newError.ResponseException.Rule)))
+                {
+                    this._ucdRepository.UpsertException(transactionID, ctpExceptionType, this.InsurerCode, claimID, newError.ResponseException.Tier, newError.ResponseException.Type, newError.ResponseException.Rule,
+                        newError.ResponseException.ShortDescription, null, null, null,newError.ResponseException.exceptionReference,null, false, DateTime.UtcNow, newError.ResponseException.SLACategory, isDrools);
+                }
+
+            
+
+        }
+        private void _CloseExistingErrors(string transactionID,string nodeName, List<ValidationResult> newErrors, List<ExceptionClass> existingExceptions)
+        {
+            nodeName = nodeName.IsNullOrEmptyAfterTrim() ? null : nodeName;
+            var existingNodeErrors = existingExceptions.Where(x => x.tier == 0 && x.node == nodeName && x.description != "Claim does not exist").ToList();
+            if (existingNodeErrors.Count == 0) return;
+            foreach (var openError in existingNodeErrors)
+            {
+                if (newErrors.Exists(x => x.MemberNames.First() == openError.element && x.ErrorMessage == openError.description)) continue;
+                
+                this._ucdRepository.UpsertException(transactionID, openError.exceptionType, this.InsurerCode, openError.sourceID, 0, openError.type, openError.rule, openError.description, nodeName, openError.element, null,openError.exceptionReference,
+                    openError.sequenceID, true, openError.exceptionRaisedDateTime, openError.categorySLA, false);
+            }
+
+        }
+        private void _CloseExistingErrors(string transactionID,string nodeName, int index, List<ValidationResult> newErrors, List<ExceptionClass> existingExceptions)
+        {
+            nodeName = nodeName.IsNullOrEmptyAfterTrim() ? null : nodeName;
+            var existingNodeErrors = existingExceptions.Where(x => x.tier == 0 && x.node == nodeName && x.index == index).ToList();
+            if (existingNodeErrors.Count == 0) return;
+            foreach (var openError in existingNodeErrors)
+            {
+                if (newErrors.Exists(x => x.MemberNames.First() == openError.element && openError.description.Contains(x.ErrorMessage))) continue;
+                this._ucdRepository.UpsertException(transactionID, openError.exceptionType, this.InsurerCode, openError.sourceID, 0, openError.type, openError.rule, openError.description, nodeName, openError.element, index,openError.exceptionReference,
+                    openError.sequenceID, true, openError.exceptionRaisedDateTime, openError.categorySLA, openError.isDrools);
+            }
+
+        }
+        private void _CloseExistingErrors(string transactionID,List<ExceptionClass> existingExceptions, bool isDrools)
+        {
+            var existingNodeErrors = existingExceptions.Where(x => x.tier > 0 && x.isDrools== isDrools ).ToList();
+            if (existingNodeErrors.Count == 0) return;
+            foreach (var openError in existingNodeErrors)
+            {
+
+                    this._ucdRepository.UpsertException(transactionID, openError.exceptionType, this.InsurerCode, openError.sourceID, openError.tier, openError.type, openError.rule, openError.description, openError.node, openError.element, null, openError.exceptionReference,
+                        openError.sequenceID, true, openError.exceptionRaisedDateTime, openError.categorySLA , isDrools);
+                
+
+            }
+
+        }
+        private void _CloseExistingErrors(string transactionID, List<ExceptionClass> existingExceptions, int index, bool isDrools)
+        {
+
+                var existingNodeErrors = existingExceptions.Where(x => x.tier > 0 && x.index == index && x.isDrools == isDrools).ToList();
+                if (existingNodeErrors.Count == 0) return;
+                foreach (var openError in existingNodeErrors)
+                {
+
+                    this._ucdRepository.UpsertException(transactionID, openError.exceptionType, this.InsurerCode, openError.sourceID, openError.tier, openError.type, openError.rule, openError.description, openError.node, openError.element, openError.index, openError.exceptionReference,
+                        openError.sequenceID, true, openError.exceptionRaisedDateTime, openError.categorySLA , openError.isDrools);
+                }
+
+
+
+
+
+        }
+        private void _CloseExistingErrors(string transactionID, string claimID, List<Models.Drools.BaseResponseValueClass> newErrors, List<ExceptionClass> existingExceptions, bool isDrools)
+        {
+
+            var existingNodeErrors = existingExceptions.Where(x => x.tier > 0 && x.isDrools == isDrools).ToList();
+            if (existingNodeErrors.Count == 0) return;
+            foreach (var openError in existingNodeErrors)
+            {
+                if (newErrors.Exists(x => x.ResponseException.Rule == openError.rule && ((openError.exceptionReference.IsNullOrEmptyAfterTrim() && x.ResponseException.exceptionReference.IsNullOrEmptyAfterTrim()) || !openError.exceptionReference.IsNullOrEmptyAfterTrim() && openError.exceptionReference == x.ResponseException.exceptionReference))) continue;
+                this._ucdRepository.UpsertException(transactionID, openError.exceptionType, this.InsurerCode, openError.sourceID, 0, openError.type, openError.rule, openError.description,null, null, null, openError.exceptionReference,
+                    openError.sequenceID, true, openError.exceptionRaisedDateTime, openError.categorySLA, openError.isDrools);
+
+            }
+            
+
+
+        }
+
+        private void _CloseExistingErrors(string transactionID, string claimID,int index, List<Models.Drools.BaseResponseValueClass> newErrors, List<ExceptionClass> existingExceptions, bool isDrools)
+        {
+            var existingNodeErrors = existingExceptions.Where(x => x.tier > 0 &&  x.index == index &&   x.isDrools == isDrools).ToList();
+            if (existingNodeErrors.Count == 0) return;
+            foreach (var openError in existingNodeErrors)
+            {
+                if (newErrors.Exists(x => x.ResponseException.Rule == openError.rule)) continue;
+                this._ucdRepository.UpsertException(transactionID, openError.exceptionType, this.InsurerCode, openError.sourceID, 0, openError.type, openError.rule, openError.description, null, null, null,openError.exceptionReference,
+                    openError.sequenceID, true, openError.exceptionRaisedDateTime, openError.categorySLA, openError.isDrools);
+            }
+
+        }
+
+        private void _CloseExistingErrors(string transactionID,string claimID, int tier, string ruleID, List<ExceptionClass> existingExceptions, bool isDrools)
+        {
+            var existingRuleErrors = existingExceptions.Where(x => x.tier == tier && x.rule == ruleID && x.isDrools == isDrools).ToList();
+            if (existingRuleErrors.Count == 0) return;
+            foreach ( var existingRuleError in existingRuleErrors)
+            {
+                this._ucdRepository.UpsertException(transactionID, existingRuleError.exceptionType, this.InsurerCode, existingRuleError.sourceID, 0, existingRuleError.type, existingRuleError.rule, existingRuleError.description, null, null, null,existingRuleError.exceptionReference,
+existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, existingRuleError.categorySLA, existingRuleError.isDrools);
+            }
+
+
+
+        }
+        private void _CloseExistingClaimDoesNotExistErrors(string transactionID, string ctpExceptionType, List<ExceptionClass> existingExceptions)
+        {
+            var existingRuleErrors = existingExceptions.Where(x => x.tier == 0 && x.exceptionType == ctpExceptionType && x.description == "Claim does not exist").ToList();
+            if (existingRuleErrors.Count == 0 ) return;
+            foreach (var existingRuleError in existingRuleErrors)
+            {
+                this._ucdRepository.UpsertException(transactionID, existingRuleError.exceptionType, this.InsurerCode, existingRuleError.sourceID, 0, existingRuleError.type, existingRuleError.rule, existingRuleError.description, null, null, null,existingRuleError.exceptionReference,
+        existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, existingRuleError.categorySLA , existingRuleError.isDrools);
+            }
+        }
+        private void _ValidateOtherTiers(string transactionID,string pirCode,string claimID, ClaimRequestClass request, List<ExceptionClass> openExceptions)
+        {
+            List<Task> tasks = new List<Task>();
+            tasks.Add(Task.Factory.StartNew(() => this._ValidateWithDrools(transactionID, claimID, request,openExceptions)));
+           tasks.Add(Task.Factory.StartNew(() => this._ValidateIsSiraRefNumUnique(transactionID, pirCode, claimID, request, openExceptions)));
+          tasks.Add(Task.Factory.StartNew(() => this._ValidateIsNomDefRefNumUnique(transactionID, claimID, pirCode, request.claim.nomDefRefNum,openExceptions)));
+            tasks.Add(Task.Factory.StartNew(() => this._ValidateNullClaimIndEqualsYGrossAmountEquals0(transactionID, claimID, pirCode, request.claim.nullClaimInd, openExceptions)));
+            tasks.Add(Task.Factory.StartNew(() => this._ValidateNullClaimIndEqualsYNetAmountEquals0(transactionID, claimID, pirCode, request.claim.nullClaimInd, openExceptions)));
+            tasks.Add(Task.Factory.StartNew(() => this._ValidateIsAccidentEventNumUnique(transactionID, claimID, pirCode,request , openExceptions)));
+
+            try
+            {
+                Task.WaitAll(tasks.ToArray());
+            }
+            catch (AggregateException ae)
+            {
+                var d =  ae.Flatten();
+                throw d;
+            }
+
+        }
+
+        private void _ValidateOtherTiers(string transactionID, string pirCode, string claimID, PaymentRequestClass paymentRequest, ClaimRequestClass claimRequest, List<ExceptionClass> openExceptions)
+        {
+            List<Task> tasks = new List<Task>();
+
+
+
+            tasks.Add(Task.Factory.StartNew(() => this._ValidateWithDrools(transactionID, claimID, paymentRequest,claimRequest, openExceptions)));
+                  tasks.Add(Task.Factory.StartNew(() => this._ValidateOrigTranIdExists(transactionID,claimID, pirCode, paymentRequest, openExceptions)));
+            try
+            {
+                Task.WaitAll(tasks.ToArray());
+            }
+            catch (AggregateException ae)
+            {
+                throw ae;
+            }
+        }
+
+        private void _ValidateIsSiraRefNumUnique(string transactionID,string pirCode, string claimID, ClaimRequestClass request, List<ExceptionClass> openExceptions)
+        {
+            try {
+             
+
+                if (request.claim.siraRefNum.IsNullOrEmptyAfterTrim()) return;
+
+
+                if (this._ucdRepository.IsSiraRefNumberUnique(pirCode, claimID, request.claim.siraRefNum))
+                {
+                    this._CloseExistingErrors(transactionID, claimID, 1, "90.1", openExceptions, false);
+                }
+                else
+                {
+                    Models.Drools.ClaimResponseValueClass newError = new Models.Drools.ClaimResponseValueClass { ResponseException = new Models.Drools.ResponseExceptionClass() { Rule = "90.1", ShortDescription = "SiraRefNum must be unique for a claim", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Warning" } };
+                    this._InsertNewErrors(transactionID, CTPCLAIMEXCEPTIONTYPE, claimID, newError, openExceptions, false);
+                }
+
+            }
+            catch (Exception exception)
+            {
+                HandleException(exception);
+                throw exception;
+            }
+
+
+
+        }
+        private void _ValidateIsNomDefRefNumUnique(string transactionID,string claimID, string pirCode, string nomDefRefNum, List<ExceptionClass> openExceptions)
+        {
+            try {
+
+                if (nomDefRefNum.IsNullOrEmptyAfterTrim()) return;
+
+
+                if (this._ucdRepository.IsNomDefRefNumUnique(pirCode, claimID , nomDefRefNum))
+                {
+                    this._CloseExistingErrors(transactionID, claimID, 1, "137.2", openExceptions, false);
+                }
+                else
+                {
+                    Models.Drools.ClaimResponseValueClass newError = new Models.Drools.ClaimResponseValueClass { ResponseException = new Models.Drools.ResponseExceptionClass() { Rule = "137.2", ShortDescription = "NomDefRefNum must be unique", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Warning" } };
+                    this._InsertNewErrors(transactionID, CTPCLAIMEXCEPTIONTYPE, claimID, newError, openExceptions, false);
+                }
+            }
+            catch (Exception exception)
+            {
+                HandleException(exception);
+                throw;
+            }
+
+
+        }
+
+        private void _ValidateNullClaimIndEqualsYGrossAmountEquals0(string transactionID,string claimID, string pirCode, string nullClaimInd, List<ExceptionClass> openExceptions)
+        {
+            try {
+
+                if (nullClaimInd.IsNullOrEmptyAfterTrim() || nullClaimInd.ToUpper() != "Y")
+                {
+                    this._CloseExistingErrors(transactionID, claimID, 1, "298.4", openExceptions, false);
+                    return;
+                }
+
+                if (this._ucdRepository.ValidateNullClaimIndGrossAmount(pirCode, claimID, nullClaimInd))
+                {
+                    this._CloseExistingErrors(transactionID, claimID, 1, "298.4", openExceptions, false);
+                }
+                else
+                {
+                    Models.Drools.ClaimResponseValueClass newError = new Models.Drools.ClaimResponseValueClass { ResponseException = new Models.Drools.ResponseExceptionClass() { Rule = "298.4", ShortDescription = "nullClaimInd cannot by Y. Payment gross amount not equal to 0", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Warning" } };
+                    this._InsertNewErrors(transactionID, CTPCLAIMEXCEPTIONTYPE, claimID, newError, openExceptions, false);
+                }
+            }
+            catch (Exception exception)
+            {
+                HandleException(exception);
+                throw;
+            }
+
+
+        }
+
+        private void _ValidateNullClaimIndEqualsYNetAmountEquals0(string transactionID,string claimID, string pirCode, string nullClaimInd, List<ExceptionClass> openExceptions)
+        {
+
+            try {
+
+                if (nullClaimInd.IsNullOrEmptyAfterTrim() || nullClaimInd.ToUpper() != "Y")
+                {
+                    this._CloseExistingErrors(transactionID, claimID, 1, "298.5", openExceptions, false);
+                    return;
+                }
+
+                if (this._ucdRepository.ValidateNullClaimIndNetAmount(pirCode, claimID, nullClaimInd))
+                {
+                    this._CloseExistingErrors(transactionID, claimID, 1, "298.5", openExceptions, false);
+                }
+                else
+                {
+                    Models.Drools.ClaimResponseValueClass newError = new Models.Drools.ClaimResponseValueClass { ResponseException = new Models.Drools.ResponseExceptionClass() { Rule = "298.5", ShortDescription = "nullClaimInd cannot by Y. Net gross amount not equal to 0", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Warning" } };
+                    this._InsertNewErrors(transactionID, CTPCLAIMEXCEPTIONTYPE, claimID, newError, openExceptions, false);
+                }
+            }
+            catch (Exception exception)
+            {
+                HandleException(exception);
+                throw exception;
+            }
+
+          
+        }
+        private void _ValidateIsAccidentEventNumUnique(string transactionID, string claimID, string pirCode, ClaimRequestClass request,List<ExceptionClass> openExceptions)
+        {
+            try {
+
+                if (request.claim.accident == null ||request.claim.accident.accidentID.IsNullOrEmptyAfterTrim()|| request.claim.accident.eventNum.IsNullOrEmptyAfterTrim()) return;
+
+
+
+                if (this._ucdRepository.IsAccidentEventNumUnique(pirCode, request.claim.accident.accidentID, request.claim.accident.eventNum))
+                {
+                    this._CloseExistingErrors(transactionID, claimID, 1, "186.1", openExceptions, false);
+                }
+                else
+                {
+                    Models.Drools.ClaimResponseValueClass newError = new Models.Drools.ClaimResponseValueClass { ResponseException = new Models.Drools.ResponseExceptionClass() { Rule = "186.1", ShortDescription = "EventNum must be unique", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Warning" } };
+                    this._InsertNewErrors(transactionID, CTPCLAIMEXCEPTIONTYPE, claimID, newError, openExceptions, false);
+                }
+            }
+            catch (Exception exception)
+            {
+                HandleException(exception);
+                throw exception;
+            }
+        
+        }
+        private void _ValidateOrigTranIdExists(string transactionID, string claimID, string pirCode, PaymentRequestClass paymentRequest, List<ExceptionClass> openExceptions)
+        {
+
+            try
+            {
+                foreach(var payment in paymentRequest.payment)
+                {
+                    if (payment.originalTransactionID.IsNullOrEmptyAfterTrim()) continue;
+
+                    if (this._ucdRepository.IsOriginalTransactionIDExists(pirCode ,claimID, payment.originalTransactionID))
+                    {
+                        this._CloseExistingErrors(transactionID, claimID, 1, "309.2", openExceptions, false);
+                    }
+                    else
+                    {
+                        Models.Drools.ClaimResponseValueClass newError = new Models.Drools.ClaimResponseValueClass { ResponseException = new Models.Drools.ResponseExceptionClass() { Rule = "309.2", ShortDescription = "originalTransactionID must exists", SLACategory = "IntegrityChecksOnAllNonBlankFields", Tier = 1, Type = "Error", exceptionReference= payment.transactionID  } };
+                        this._InsertNewErrors(transactionID, CTPPAYMENTEXCEPTIONTYPE, claimID, newError, openExceptions, false);
+                    }
+                }
+
+            }
+            catch (Exception exception)
+            {
+                HandleException(exception);
+                throw exception;
+            }
+
+        }
+        private void _ValidateWithDrools(string transactionID,string claimID, ClaimRequestClass request, List<ExceptionClass> openExceptions)
+        {
+            try {
+
+                var apiRequest = _CreateWebRequest("claimEndPoint");
+
+                var droolsRequest = new Models.Drools.RequestClass();
+                //var javaUtilDate = request.providerProcessedDateTime.ParseIso8601("yyyyMMdd'T'HHmmss'Z'").Value.ToString("yyyy-MM-dd");
+                var javaUtilDate = request.providerProcessedDateTime.ParseIso8601("yyyyMMdd'T'HHmmss'Z'").Value.Date.ToString("yyyyMMddTHHmmss") + "Z";
+                droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { SetGlobalCommand = new Models.Drools.SetGlobalCommandClass() { JavaUtilDateCommand = new Models.Drools.JavaUtilDateCommandClass() { JavaUtilDate = javaUtilDate } } });
+                // droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { InsertCommand = new Models.Drools.InsertCommandClass() { ReturnObject=true,  OutIdentifier = "inValue", InsertObject = new Models.Drools.InsertObjectCommandClass() { Claim = request.claim } } });
+                droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { InsertCommand = new Models.Drools.InsertCTPClaimCommandClass() { InsertObject = new Models.Drools.InsertCTPClaimObjCommandClass() { Claim = request.claim } } });
+                droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { FireAllRules = string.Empty });
+                droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { GetObjects = new Models.Drools.GetObjectsCommandClass() });
+                var jsonString = JsonConvert.SerializeObject(droolsRequest, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
+
+                var responseString = string.Empty;
+                using (var streamWriter = new StreamWriter(apiRequest.GetRequestStream()))
+                {
+
+
+                    streamWriter.Write(jsonString);
+                    streamWriter.Flush();
+                    streamWriter.Close();
+
+                    var httpResponse = (HttpWebResponse)apiRequest.GetResponse();
+                    using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
+                    {
+                        responseString = streamReader.ReadToEnd();
+                    }
+                }
+                var response = JsonConvert.DeserializeObject<Models.Drools.ResponseClass>(responseString);
+
+                if (response.Type.ToUpper().Trim() == "FAILURE")
+                {
+                    throw new Exception(response.Msg);
+
+                }
+
+                var result = response.Result.ExecutionResult.ExecutionResultResult[0];
+                if (result.Value.Count == 0)
+                {
+                    this._CloseExistingErrors(transactionID, openExceptions, true);
+                    return;
+                }
+                var droolExceptions = new List<Models.Drools.BaseResponseValueClass>();
+                for (int i = 0; i <= result.Value.Count - 1; i++)
+                {
+                    var droolException = result.Value[i].ToObject<Models.Drools.ClaimResponseValueClass>();
+                    if (droolException.ResponseException == null) continue;
+                    droolExceptions.Add(droolException);
+
+                }
+
+                this._InsertNewErrors(transactionID, CTPCLAIMEXCEPTIONTYPE, claimID, droolExceptions, openExceptions, true);
+                this._CloseExistingErrors(transactionID, claimID, droolExceptions, openExceptions, true);
+
+
+
+            }
+            catch (Exception exception)
+            {
+                HandleException(exception);
+                throw exception;
+            }
+
+
+        }
+
+
+        private void _ValidateWithDrools(string transactionID, string claimID, PaymentRequestClass paymentRequest, ClaimRequestClass claimRequest, List<ExceptionClass> openExceptions)
+        {
+
+            try {
+                int index = 0;
+                var droolExceptions = new List<Models.Drools.BaseResponseValueClass>();
+
+                foreach (var payment in paymentRequest.payment)
+                {
+
+                    var droolsRequest = new Models.Drools.RequestClass();
+                    //var javaUtilDate = request.providerProcessedDateTime.ParseIso8601("yyyyMMdd'T'HHmmss'Z'").Value.ToString("yyyy-MM-dd");
+                    var javaUtilDate = paymentRequest.providerProcessedDateTime.ParseIso8601("yyyyMMdd'T'HHmmss'Z'").Value.Date.ToString("yyyyMMddTHHmmss") + "Z";
+                    droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { SetGlobalCommand = new Models.Drools.SetGlobalCommandClass() { JavaUtilDateCommand = new Models.Drools.JavaUtilDateCommandClass() { JavaUtilDate = javaUtilDate } } });
+                    // droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { InsertCommand = new Models.Drools.InsertCommandClass() { ReturnObject=true,  OutIdentifier = "inValue", InsertObject = new Models.Drools.InsertObjectCommandClass() { Claim = request.claim } } });
+                    droolsRequest.commands.Add(new Models.Drools.RequestCommandClass()
+                    {
+                        InsertCommand = new Models.Drools.InsertCTPClaimPayCommandClass()
+                        {
+                            InsertObject = new Models.Drools.InsertCTPClaimPayObjCommandClass()
+                            {
+                                paymentPayload = new Models.Drools.InsertCTPPayPayloadObjCommandClass()
+                                {
+                                    Payment = payment,
+                                    Claim = claimRequest.claim
+                                }
+                            }
+                        }
+                    });
+                    droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { FireAllRules = string.Empty });
+                    droolsRequest.commands.Add(new Models.Drools.RequestCommandClass() { GetObjects = new Models.Drools.GetObjectsCommandClass() { OutIdentifier = string.Empty } });
+                    var jsonString = JsonConvert.SerializeObject(droolsRequest, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
+
+                    var responseString = string.Empty;
+                    var apiRequest = _CreateWebRequest("paymentEndPoint");
+                    using (var streamWriter = new StreamWriter(apiRequest.GetRequestStream()))
+                    {
+
+
+                        streamWriter.Write(jsonString);
+                        streamWriter.Flush();
+                        streamWriter.Close();
+
+                        var httpResponse = (HttpWebResponse)apiRequest.GetResponse();
+                        using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
+                        {
+                            responseString = streamReader.ReadToEnd();
+                        }
+                    }
+                    var response = JsonConvert.DeserializeObject<Models.Drools.ResponseClass>(responseString);
+
+                    if (response.Type.ToUpper().Trim() == "FAILURE")
+                    {
+                        throw new Exception(response.Msg);
+
+                    }
+
+                    var result = response.Result.ExecutionResult.ExecutionResultResult[0];
+                    //if (result.Value.Count == 0)
+                    //{
+                    //    this._CloseExistingErrors(transactionID, openExceptions, index, true);
+                    //    return;
+                    //}
+
+                    for (int i = 0; i <= result.Value.Count - 1; i++)
+                    {
+                        var droolException = result.Value[i].ToObject<Models.Drools.PaymentResponseValueClass>();
+                        if (droolException.ResponseException == null) continue;
+                        if (droolExceptions.Exists(x => x.ResponseException.Rule == droolException.ResponseException.Rule && x.ResponseException.exceptionReference == droolException.ResponseException.exceptionReference)) continue;
+                        droolExceptions.Add(droolException);
+
+                    }
+
+
+                    index++;
+
+
+                }
+
+                this._InsertNewErrors(transactionID, CTPPAYMENTEXCEPTIONTYPE, claimID, droolExceptions, openExceptions, true);
+                this._CloseExistingErrors(transactionID, claimID, droolExceptions, openExceptions, true);
+            }
+            catch (Exception exception)
+            {
+                HandleException(exception);
+                throw exception;
+            }
+ 
+
+        }
+
+
+
+        private WebRequest _CreateWebRequest(string droolsEndPoint)
+        {
+            NameValueCollection droolsConfiguration = ConfigurationManager.GetSection("DroolsConfiguration") as NameValueCollection;
+            var apiRequest = (HttpWebRequest)WebRequest.Create(droolsConfiguration[droolsEndPoint]);
+            apiRequest.Method = "POST";
+            apiRequest.ContentType = droolsConfiguration["header-Content-Type"];
+            apiRequest.Accept = droolsConfiguration["header-Accept"];
+            apiRequest.Headers.Add("X-KIE-ContentType", droolsConfiguration["header-X-KIE-ContentType"]);
+            apiRequest.Headers.Add("Authorization", droolsConfiguration["header-Authorization"]);
+            return apiRequest;
+        }
+
+        private ClaimRequestClass _GetClaimRequest(string claimID)
+        {
+            var ctpClaim = this._ucdRepository.GetClaimTransaction(this.APIKey, this.InsurerCode, base.GetHeaderValues(commonHelper.Constants.TransactionIdHeaderKey),
+claimID, false);
+            if (ctpClaim == null) return null;
+
+            return JsonConvert.DeserializeObject<ClaimRequestClass>(ctpClaim.ToString());
+        }
+
+
+        private void _UnpackClaimTransaction (string transactionID, string pirCode)
+        {
+            try {
+
+                System.Threading.Thread.Sleep(2000);
+
+                this._ucdRepository.WriteClaimTransactionAsync(transactionID, pirCode);
+            }
+            catch (Exception exception)
+            {
+                HandleException(exception);
+                return;
+            }
+        }
+
+        private void _UnpackPaymentTransaction(string transactionID, string pirCode)
+        {
+            try
+            {
+                System.Threading.Thread.Sleep(2000);
+
+                this._ucdRepository.WritePaymentTransactionAsync(transactionID, pirCode);
+            }
+            catch (Exception exception)
+            {
+                HandleException(exception);
+                return;
+            }
+        }
+    }
+}

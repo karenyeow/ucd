@@ -8,4 +8,9 @@
     <NoWarn>1701;1702;1705;1006</NoWarn>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\comlib\Common.Framework\Comlib.Common.Framework.csproj" />
+    <ProjectReference Include="..\comlib\Common.Helpers\Comlib.Common.Helpers.csproj" />
+  </ItemGroup>
+
 </Project>
