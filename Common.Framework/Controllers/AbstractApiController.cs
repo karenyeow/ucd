@@ -6,8 +6,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
 using System.Linq;
 using Comlib.Common.Helpers.Constants;
+using System.ComponentModel;
+using System.Net;
+using System.Globalization;
 
-namespace iCare.Api.Controllers
+namespace Comlib.Common.Framework.Controllers
 {
     public class AbstractApiController : Controller
     {
@@ -18,7 +21,7 @@ namespace iCare.Api.Controllers
             _oneGovEmailSender = oneGovEmailSender;
         }
 
-        protected async Task<IActionResult> HandleException(Exception ex)
+        protected async Task<IActionResult> HandleExceptionAsync(Exception ex)
         {
             await _oneGovEmailSender.SendErrorEmailAsync(ex);
             return new BadRequestObjectResult(new
@@ -27,6 +30,45 @@ namespace iCare.Api.Controllers
                 ErrorDescription = ex.Message
             });
         }
+
+        protected async Task<IActionResult> HandleInternalErrorExceptionAsync(Exception ex)
+        {
+            await _oneGovEmailSender.SendErrorEmailAsync(ex);
+            var e = ex as Win32Exception ?? ex.InnerException as Win32Exception;
+
+            if (e == null)
+            {
+                return StatusCode(500, new { Error = e.ErrorCode.ToString(CultureInfo.InvariantCulture), ErrorDescription = ex.Message });
+   
+            }
+            else
+            {
+                return StatusCode(500, new { Error = ex.HResult.ToString(CultureInfo.InvariantCulture), ErrorDescription = ex.Message });
+
+            }
+
+      
+        }
+
+        protected  IActionResult HandleInternalErrorException(Exception ex)
+        {
+             _oneGovEmailSender.SendErrorEmailSync(ex);
+            var e = ex as Win32Exception ?? ex.InnerException as Win32Exception;
+
+            if (e == null)
+            {
+                return StatusCode(500, new { Error = e.ErrorCode.ToString(CultureInfo.InvariantCulture), ErrorDescription = ex.Message });
+
+            }
+            else
+            {
+                return StatusCode(500, new { Error = ex.HResult.ToString(CultureInfo.InvariantCulture), ErrorDescription = ex.Message });
+
+            }
+
+
+        }
+
 
         protected string GetHeaderValues(string key)
         {
@@ -42,13 +84,13 @@ namespace iCare.Api.Controllers
         protected void SetHeaderValues()
         {
             _SetCommonHeaderValues();
-            Request.Headers.Add(APIHeaderConstants.ResponseTimeHeaderKey, DateTime.UtcNow.ToString("yyyyMMddTHHmmss") + "Z");
+            Response.Headers.Add(APIHeaderConstants.ResponseTimeHeaderKey, DateTime.UtcNow.ToString("yyyyMMddTHHmmss") + "Z");
 
         }
         protected void SetHeaderValuesUTC()
         {
             _SetCommonHeaderValues();
-            Request.Headers.Add(APIHeaderConstants.ResponseTimeHeaderKey, DateTime.UtcNow.ToString("yyyyMMddTHHmmss") + "Z");
+            Response.Headers.Add(APIHeaderConstants.ResponseTimeHeaderKey, DateTime.UtcNow.ToString("yyyyMMddTHHmmss") + "Z");
            
         }
 
@@ -58,14 +100,14 @@ namespace iCare.Api.Controllers
             var transactionIdKey = GetHeaderValues(APIHeaderConstants.TransactionIdHeaderKey);
             var lastModifiedTimeStampRaw = GetHeaderValues(APIHeaderConstants.RequestIfModifiedSinceHeaderKey);
 
-            Request.Headers.Clear();
-            Request.Headers.Add(APIHeaderConstants.RequestTimeHeaderKey, requestedTimeStampRaw);
-            Request.Headers.Add(APIHeaderConstants.RequestIfModifiedSinceHeaderKey, lastModifiedTimeStampRaw);
-            Request.Headers.Add(APIHeaderConstants.TransactionIdHeaderKey, transactionIdKey);
+            Response.Headers.Clear();
+            Response.Headers.Add(APIHeaderConstants.RequestTimeHeaderKey, requestedTimeStampRaw);
+            Response.Headers.Add(APIHeaderConstants.RequestIfModifiedSinceHeaderKey, lastModifiedTimeStampRaw);
+            Response.Headers.Add(APIHeaderConstants.TransactionIdHeaderKey, transactionIdKey);
 
 
         }
 
-
+     
     }
 }
