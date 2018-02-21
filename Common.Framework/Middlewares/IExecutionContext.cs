@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 
-namespace Comlib.Common.Helpers.Middlewares
+namespace Comlib.Common.Framework.Middlewares
 {
     public interface IExecutionContext
     {

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 
-namespace Comlib.Common.Helpers.Middlewares
+namespace Comlib.Common.Framework.Middlewares
 {
     /// <summary>
     /// A <see cref="Stream"/> which wraps around another <see cref="Stream"/> and copies all data to a <see cref="MemoryStream"/>.
