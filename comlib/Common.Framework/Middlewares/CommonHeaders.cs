@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Http;
 using System;
 using System.Threading.Tasks;
 
-namespace Comlib.Common.Helpers.Middlewares
+namespace Comlib.Common.Framework.Middlewares
 {
     public class CommonHeaders
     {

@@ -1,20 +1,20 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Text;
 
-namespace Comlib.Common.Helpers.Middlewares
+namespace Comlib.Common.Framework.Middlewares
 {
     /// <summary>
-    /// A <see cref="Stream"/> which wraps around another <see cref="Stream"/> and copies all data to a <see cref="MemoryStream"/>.
-    /// Used by the logging framework.
+    /// Traces the request data which is read by the server.
     /// </summary>
-    public class ResponseLoggerStream : Stream
+    public class RequestLoggerStream : Stream
     {
-        private readonly Stream _inner;
         private readonly MemoryStream _tracerStream;
         private readonly bool _ownsParent;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="ResponseLoggerStream"/> class.
+        /// Initializes a new instance of the <see cref="RequestLoggerStream"/> class.
         /// </summary>
         /// <param name="inner">
         /// The stream which is being wrapped.
@@ -23,21 +23,21 @@ namespace Comlib.Common.Helpers.Middlewares
         /// A value indicating whether the <paramref name="inner"/> should be disposed when the
         /// <see cref="RequestLoggerStream"/> is disposed.
         /// </param>
-        public ResponseLoggerStream(Stream inner, bool ownsParent)
+        public RequestLoggerStream(Stream inner, bool ownsParent)
         {
             if (inner == null)
             {
                 throw new ArgumentNullException(nameof(inner));
             }
 
-            if (inner is ResponseLoggerStream)
+            if (inner is RequestLoggerStream)
             {
-                throw new InvalidOperationException("nesting of ResponseLoggerStream objects is not allowed");
+                throw new InvalidOperationException("nesting of RequestLoggerStream objects is not allowed");
             }
 
-            _inner = inner;
+            this.Inner = inner;
             _tracerStream = new MemoryStream();
-            _ownsParent = ownsParent;
+            this._ownsParent = ownsParent;
         }
 
         /// <summary>
@@ -47,62 +47,62 @@ namespace Comlib.Common.Helpers.Middlewares
         public MemoryStream TracerStream => _tracerStream;
 
         /// <summary>
-        /// Gets the <see cref="Stream"/> around which this <see cref="ResponseLoggerStream"/> wraps.
+        /// Gets the <see cref="Stream"/> around which this <see cref="RequestLoggerStream"/> wraps.
         /// </summary>
-        public Stream Inner => _inner;
+        public Stream Inner { get; }
 
         /// <inheritdoc/>
-        public override bool CanRead => _inner.CanRead;
+        public override bool CanRead => Inner.CanRead;
 
         /// <inheritdoc/>
-        public override bool CanSeek => _inner.CanSeek;
+        public override bool CanSeek => Inner.CanSeek;
 
         /// <inheritdoc/>
-        public override bool CanWrite => _inner.CanWrite;
+        public override bool CanWrite => Inner.CanWrite;
 
         /// <inheritdoc/>
-        public override long Length => _inner.Length;
+        public override long Length => Inner.Length;
 
         /// <inheritdoc/>
         public override long Position
         {
-            get => _inner.Position;
+            get => Inner.Position;
 
-            set => _inner.Position = value;
+            set => Inner.Position = value;
         }
 
         /// <inheritdoc/>
         public override void Flush()
         {
-            _inner.Flush();
+            Inner.Flush();
         }
 
         /// <inheritdoc/>
         public override int Read(byte[] buffer, int offset, int count)
         {
-            _tracerStream.Read(buffer, offset, count);
-            return _inner.Read(buffer, offset, count);
+            var read = Inner.Read(buffer, offset, count);
+            _tracerStream.Write(buffer, offset, read);
+            return read;
         }
 
         /// <inheritdoc/>
         public override long Seek(long offset, SeekOrigin origin)
         {
             _tracerStream.Seek(offset, origin);
-            return _inner.Seek(offset, origin);
+            return Inner.Seek(offset, origin);
         }
 
         /// <inheritdoc/>
         public override void SetLength(long value)
         {
             _tracerStream.SetLength(value);
-            _inner.SetLength(value);
+            Inner.SetLength(value);
         }
 
         /// <inheritdoc/>
         public override void Write(byte[] buffer, int offset, int count)
         {
             _tracerStream.Write(buffer, offset, count);
-            _inner.Write(buffer, offset, count);
         }
 
         /// <inheritdoc/>
@@ -112,7 +112,7 @@ namespace Comlib.Common.Helpers.Middlewares
 
             if (_ownsParent)
             {
-                _inner.Dispose();
+                Inner.Dispose();
             }
 
             base.Dispose(disposing);

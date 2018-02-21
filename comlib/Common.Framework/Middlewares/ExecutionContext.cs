@@ -1,7 +1,7 @@
 ﻿using Comlib.Common.Helpers.Constants;
 using Microsoft.AspNetCore.Http;
 
-namespace Comlib.Common.Helpers.Middlewares
+namespace Comlib.Common.Framework.Middlewares
 {
     public class ExecutionContext : IExecutionContext
     {
