@@ -1,7 +1,8 @@
-﻿using Comlib.Common.Helpers.Constants;
+﻿using Comlib.Common.Framework.Controllers;
+using Comlib.Common.Helpers.Constants;
 using Comlib.Common.Helpers.Email;
 using Comlib.Common.Helpers.Extensions;
-using iCare.Api.Controllers;
+
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -80,7 +81,7 @@ namespace UCD.API.Controllers
             }
         }
 
-        public virtual async Task<IActionResult> UploadCTPClaim()
+        public virtual async Task<IActionResult > UploadCTPClaim()
         {
             try
             {
@@ -123,7 +124,7 @@ namespace UCD.API.Controllers
             }
             catch (Exception exception)
             {
-                return await HandleException(exception);
+                return await HandleInternalErrorExceptionAsync(exception);
             }
 
         }
@@ -144,7 +145,7 @@ namespace UCD.API.Controllers
             }
             catch (Exception exception)
             {
-                return await HandleException(exception);
+                return await HandleInternalErrorExceptionAsync(exception);
             }
         }
 
@@ -206,7 +207,7 @@ namespace UCD.API.Controllers
             }
             catch (Exception exception)
             {
-                return await  HandleException(exception);
+                return await HandleInternalErrorExceptionAsync(exception);
             }
         }
 
@@ -226,7 +227,7 @@ namespace UCD.API.Controllers
             }
             catch (Exception exception)
             {
-                return await HandleException(exception);
+                return await HandleInternalErrorExceptionAsync(exception);
             }
         }
 
@@ -268,7 +269,7 @@ namespace UCD.API.Controllers
             }
             catch (Exception exception)
             {
-                return await HandleException(exception);
+                return await HandleInternalErrorExceptionAsync(exception);
             }
         }
 
@@ -297,14 +298,14 @@ namespace UCD.API.Controllers
                 return new OkObjectResult("");            }
             catch (Exception exception)
             {
-                return  await HandleException(exception);
+                return  await HandleInternalErrorExceptionAsync(exception);
             }
 
         }
 
         private ClaimResponseClass _CreateResponse(string id, ClaimRequestClass request, List<ExceptionClass> openExceptions)
         {
-            HttpStatusCode httpStatus;
+       
             var response = new ClaimResponseClass()
             {
                 claimID = id,
@@ -415,6 +416,7 @@ namespace UCD.API.Controllers
             }
             catch (AggregateException ae)
             {
+                HandleInternalErrorException(ae);
                 throw ae;
             }
         }
@@ -438,6 +440,7 @@ namespace UCD.API.Controllers
             }
             catch (AggregateException ae)
             {
+                HandleInternalErrorException(ae);
                 throw ae;
             }
         }
@@ -461,7 +464,7 @@ namespace UCD.API.Controllers
             }
             catch (Exception exception)
             {
-              
+                HandleInternalErrorException(exception);
                 throw exception;
             }
 
@@ -495,7 +498,7 @@ namespace UCD.API.Controllers
             }
             catch (Exception exception)
             {
-                //HandleException(exception);
+                HandleInternalErrorException(exception);
                 throw exception;
             }
        
@@ -713,6 +716,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
             }
             catch (AggregateException ae)
             {
+                HandleInternalErrorException(ae);
                 throw ae;
             }
         }
@@ -738,7 +742,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
             }
             catch (Exception exception)
             {
-                //HandleException(exception);
+                HandleInternalErrorException(exception);
                 throw exception;
             }
 
@@ -764,7 +768,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
             }
             catch (Exception exception)
             {
-                HandleException(exception);
+                HandleInternalErrorException(exception);
                 throw;
             }
 
@@ -793,7 +797,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
             }
             catch (Exception exception)
             {
-                HandleException(exception);
+                HandleInternalErrorException(exception);
                 throw;
             }
 
@@ -823,7 +827,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
             }
             catch (Exception exception)
             {
-                HandleException(exception);
+                HandleInternalErrorException(exception);
                 throw exception;
             }
 
@@ -849,7 +853,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
             }
             catch (Exception exception)
             {
-                HandleException(exception);
+                HandleInternalErrorException(exception);
                 throw exception;
             }
         
@@ -877,7 +881,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
             }
             catch (Exception exception)
             {
-                HandleException(exception);
+                HandleInternalErrorException(exception);
                 throw exception;
             }
 
@@ -944,7 +948,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
             }
             catch (Exception exception)
             {
-                HandleException(exception);
+                HandleInternalErrorException(exception);
                 throw exception;
             }
 
@@ -1036,7 +1040,7 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
             }
             catch (Exception exception)
             {
-                HandleException(exception);
+                HandleInternalErrorException(exception);
                 throw exception;
             }
  
@@ -1077,7 +1081,7 @@ claimID, false);
             }
             catch (Exception exception)
             {
-                HandleException(exception);
+                HandleInternalErrorException(exception);
                 return;
             }
         }
@@ -1092,7 +1096,7 @@ claimID, false);
             }
             catch (Exception exception)
             {
-                HandleException(exception);
+                HandleInternalErrorException(exception);
                 return;
             }
         }

@@ -1,18 +1,11 @@
-﻿using ICPWeb.PublicServices.Filters.Sira;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
-using System.Web.Http;
+﻿using System.Threading.Tasks;
 
-namespace ICPWeb.PublicServices.Controllers
+namespace UCD.API.Controllers
 {
     [UnqiueTransactionIDFilterAttribute]
     [ValidateAPIKeyInsurerCode]
     [RoutePrefix("api/siraapi")]
-    public class SiraAPIV1Controller : SIRAAPIBaseController
+    public class UCDAPIV1Controller : UCDAPIBaseController
     {
 
         [HttpPost]
