@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="11.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\comlib\Common.Framework\Comlib.Common.Framework.csproj" />
     <ProjectReference Include="..\comlib\Common.Helpers\Comlib.Common.Helpers.csproj" />
   </ItemGroup>

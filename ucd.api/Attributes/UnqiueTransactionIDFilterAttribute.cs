@@ -1,6 +1,7 @@
 ﻿using Comlib.Common.Helpers.Constants;
 using Comlib.Common.Helpers.Extensions;
 using Microsoft.AspNetCore.Mvc.Filters;
+using System;
 using System.Net;
 using UCD.Repository;
 
@@ -18,6 +19,7 @@ namespace UCD.API.Attributes
             var transactionID = context.HttpContext.Request.GetHeaderValues(APIHeaderConstants.TransactionIdHeaderKey);
             var pirCode = context.HttpContext.Request.GetHeaderValues("insurerCode");
             if (!_ucdRepository.IsTransactionNumberUnique(pirCode, transactionID))
+                throw new ApplicationException() {  Data = }
                context.HttpContext.Response.
                 throw new HttpResponseException(actionContext.Request.CreateResponse<ErrorErrorDetails>(HttpStatusCode.BadRequest, new ErrorErrorDetails("TransactionIDValidationError", "TransactionID is not unique")));
         }
