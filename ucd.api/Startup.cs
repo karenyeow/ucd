@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net;
-using System.Threading.Tasks;
-using Comlib.Common.Framework.Extensions;
-using Comlib.Common.Helpers.Connections;
+﻿using Comlib.Common.Framework.Extensions;
 using Comlib.Common.Helpers.Email;
 using Comlib.Common.Helpers.Middlewares;
 using Comlib.Common.Model.Error;
@@ -17,9 +11,12 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
 using UCD.Repository;
 
 namespace UCD.API
@@ -86,14 +83,14 @@ namespace UCD.API
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory, IExecutionContext executionContext)
         {
-            app.ExtractCommonHeaders();
+          //  app.ExtractCommonHeaders();
 
             if (_hostingEnvironment.IsEnvironment("Development"))
             {
                 app.UseDeveloperExceptionPage();
             }
 
-          //  app.UseSetCommonHeaders();
+          //app.UseSetCommonHeaders();
 
          //   app.UseMiddleware<ErrorHandlingMiddleware>();
            app.UseMiddleware<RequestLoggingMiddleware>();

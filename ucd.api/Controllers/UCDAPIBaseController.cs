@@ -138,10 +138,10 @@ namespace UCD.API.Controllers
                 var pirCode = this.InsurerCode;
                 var ctpClaim =  this._ucdRepository.GetClaimTransaction(this.APIKey, pirCode,this.TransactionID,
                     id,true);
-                var response = new OkObjectResult(ctpClaim ?? string.Empty);
+                return  new OkObjectResult(JsonConvert.DeserializeObject(ctpClaim == null ? string.Empty : ctpClaim));
 
 
-                return response;
+   
 
             }
             catch (Exception exception)
@@ -222,9 +222,8 @@ namespace UCD.API.Controllers
                 var ctpPayments = this._ucdRepository.GetPaymentTransaction(this.APIKey, pirCode, this.TransactionID,
                     id);
 
+                return new OkObjectResult(JsonConvert.DeserializeObject(ctpPayments == null ? string.Empty : ctpPayments));
 
-                return ctpPayments == null ? new OkObjectResult("") : new OkObjectResult(ctpPayments);
-               
             }
             catch (Exception exception)
             {
