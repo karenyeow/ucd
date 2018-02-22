@@ -1,12 +1,15 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Comlib.Common.Model.Error;
+using Microsoft.AspNetCore.Http;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace Comlib.Common.Helpers.Middlewares
 {
-    public  abstract class ErrorHandlingMiddleware
+    public   class ErrorHandlingMiddleware
     {
         private readonly RequestDelegate next;
 
@@ -27,7 +30,17 @@ namespace Comlib.Common.Helpers.Middlewares
             }
         }
 
-        protected abstract Task HandleExceptionAsync(HttpContext context, Exception exception);
-        
+        private static Task HandleExceptionAsync(HttpContext context, Exception exception)
+        {
+            var code = HttpStatusCode.InternalServerError; // 500 if unexpected
+
+
+
+            var result = JsonConvert.SerializeObject(new ErrorErrorDetails(exception.HResult.ToString(), exception.Message));
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = (int)code;
+            return context.Response.WriteAsync(result);
+        }
+
     }
 }
