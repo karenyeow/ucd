@@ -15,6 +15,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
+using UCD.API.Helpers;
 using UCD.Model.Base;
 using UCD.Model.Drools.V1;
 using UCD.Model.V1;
@@ -1051,7 +1052,8 @@ existingRuleError.sequenceID, true, existingRuleError.exceptionRaisedDateTime, e
 
         private WebRequest _CreateWebRequest(string droolsEndPoint)
         {
-            NameValueCollection droolsConfiguration = ConfigurationManager.GetSection("DroolsConfiguration") as NameValueCollection;
+
+            var droolsConfiguration = UCDGlobal.Drools;
             var apiRequest = (HttpWebRequest)WebRequest.Create(droolsConfiguration[droolsEndPoint]);
             apiRequest.Method = "POST";
             apiRequest.ContentType = droolsConfiguration["header-Content-Type"];

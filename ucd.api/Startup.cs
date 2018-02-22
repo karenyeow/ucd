@@ -46,6 +46,7 @@ namespace UCD.API
                     .AddJsonFile($"appsettings.{hostingEnvironment.EnvironmentName}.json", optional: true)
                     .AddEnvironmentVariables();
                 _configuration = builder.Build();
+                Helpers.UCDGlobal.Config = _configuration;
             }
             catch (Exception exception)
             {
@@ -57,6 +58,7 @@ namespace UCD.API
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+           
             // Add framework services.
             services.AddMvc().AddJsonOptions(options => options.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver()); ;
 
@@ -76,6 +78,7 @@ namespace UCD.API
             services.AddTransient<IOneGovEmailSender, OneGovEmailSender>();
 
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+            
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
