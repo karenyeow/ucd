@@ -9,6 +9,7 @@ using Comlib.Common.Helpers.Constants;
 using System.ComponentModel;
 using System.Net;
 using System.Globalization;
+using Comlib.Common.Model.Error;
 
 namespace Comlib.Common.Framework.Controllers
 {
@@ -38,12 +39,12 @@ namespace Comlib.Common.Framework.Controllers
 
             if (e == null)
             {
-                return StatusCode(500, new { Error = e.ErrorCode.ToString(CultureInfo.InvariantCulture), ErrorDescription = ex.Message });
+                return StatusCode(500,  new  ErrorErrorDetails(e.ErrorCode.ToString(CultureInfo.InvariantCulture),ex.Message ));
    
             }
             else
             {
-                return StatusCode(500, new { Error = ex.HResult.ToString(CultureInfo.InvariantCulture), ErrorDescription = ex.Message });
+                return StatusCode(500, new ErrorErrorDetails(ex.HResult.ToString(CultureInfo.InvariantCulture), ex.Message));
 
             }
 
@@ -57,12 +58,12 @@ namespace Comlib.Common.Framework.Controllers
 
             if (e == null)
             {
-                return StatusCode(500, new { Error = e.ErrorCode.ToString(CultureInfo.InvariantCulture), ErrorDescription = ex.Message });
+                return StatusCode(500, new ErrorErrorDetails(e.ErrorCode.ToString(CultureInfo.InvariantCulture), ex.Message));
 
             }
             else
             {
-                return StatusCode(500, new { Error = ex.HResult.ToString(CultureInfo.InvariantCulture), ErrorDescription = ex.Message });
+                return StatusCode(500, new ErrorErrorDetails(ex.HResult.ToString(CultureInfo.InvariantCulture), ex.Message));
 
             }
 
