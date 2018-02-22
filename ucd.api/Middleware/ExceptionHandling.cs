@@ -8,27 +8,10 @@ using System.Threading.Tasks;
 
 namespace UCD.API.Middleware
 {
-    public class ErrorHandlingMiddleware
+    public class ErrorHandlingMiddleware:Comlib.Common.Helpers.Middlewares.ErrorHandlingMiddleware  
     {
-        private readonly RequestDelegate next;
-
-        public ErrorHandlingMiddleware(RequestDelegate next)
-        {
-            this.next = next;
-        }
-
-        public async Task Invoke(HttpContext context /* other dependencies */)
-        {
-            try
-            {
-                await next(context);
-            }
-            catch (Exception ex)
-            {
-                await HandleExceptionAsync(context, ex);
-            }
-        }
-
+        
+       public override 
         private static Task HandleExceptionAsync(HttpContext context, Exception exception)
         {
             var code = HttpStatusCode.InternalServerError; // 500 if unexpected
