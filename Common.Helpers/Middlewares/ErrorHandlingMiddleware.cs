@@ -1,4 +1,5 @@
 ﻿using Comlib.Common.Model.Error;
+using Comlib.Common.Model.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
 using System;
@@ -34,9 +35,11 @@ namespace Comlib.Common.Helpers.Middlewares
         {
             var code = HttpStatusCode.InternalServerError; // 500 if unexpected
 
-
-
-            var result = JsonConvert.SerializeObject(new ErrorErrorDetails(exception.HResult.ToString(), exception.Message));
+            string result;
+            if (exception is AppException)
+                result = JsonConvert.SerializeObject(new ErrorErrorDetails((exception as AppException).Code, exception.Message));
+            else
+                result = JsonConvert.SerializeObject(new ErrorErrorDetails(exception.HResult.ToString(), exception.Message));
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = (int)code;
             return context.Response.WriteAsync(result);
