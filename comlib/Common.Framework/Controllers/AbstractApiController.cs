@@ -39,16 +39,17 @@ namespace Comlib.Common.Framework.Controllers
 
             if (e == null)
             {
-                return StatusCode(500,  new  ErrorErrorDetails(e.ErrorCode.ToString(CultureInfo.InvariantCulture),ex.Message ));
-   
-            }
-            else
-            {
                 return StatusCode(500, new ErrorErrorDetails(ex.HResult.ToString(CultureInfo.InvariantCulture), ex.Message));
 
             }
+            else
+            {
+                return StatusCode(500, new ErrorErrorDetails(e.ErrorCode.ToString(CultureInfo.InvariantCulture), e.Message));
 
-      
+            }
+
+
+
         }
 
         protected  IActionResult HandleInternalErrorException(Exception ex)
@@ -58,12 +59,12 @@ namespace Comlib.Common.Framework.Controllers
 
             if (e == null)
             {
-                return StatusCode(500, new ErrorErrorDetails(e.ErrorCode.ToString(CultureInfo.InvariantCulture), ex.Message));
+                return StatusCode(500, new ErrorErrorDetails(ex.HResult.ToString(CultureInfo.InvariantCulture), ex.Message));
 
             }
             else
             {
-                return StatusCode(500, new ErrorErrorDetails(ex.HResult.ToString(CultureInfo.InvariantCulture), ex.Message));
+                return StatusCode(500, new ErrorErrorDetails(e.ErrorCode.ToString(CultureInfo.InvariantCulture), e.Message));
 
             }
 

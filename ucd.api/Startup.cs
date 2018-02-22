@@ -7,6 +7,8 @@ using Comlib.Common.Framework.Extensions;
 using Comlib.Common.Helpers.Connections;
 using Comlib.Common.Helpers.Email;
 using Comlib.Common.Helpers.Middlewares;
+using Comlib.Common.Model.Error;
+using Comlib.Common.Model.Exceptions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics;
@@ -91,9 +93,10 @@ namespace UCD.API
                 app.UseDeveloperExceptionPage();
             }
 
-            app.UseSetCommonHeaders();
+          //  app.UseSetCommonHeaders();
 
-            app.UseMiddleware<RequestLoggingMiddleware>();
+         //   app.UseMiddleware<ErrorHandlingMiddleware>();
+           app.UseMiddleware<RequestLoggingMiddleware>();
 
             if (_exceptions.Any(p => p.Value.Any()))
             {
@@ -123,11 +126,16 @@ namespace UCD.API
 
                         if (error != null)
                         {
-                            var errorObject = new
+                            string errorCode;
+                            if (error.Error is AppException)
                             {
-                                Error = error.Error.HResult.ToString(),
-                                ErrorDescription = error.Error.Message
-                            };
+                                errorCode = (error.Error as AppException).Code;
+                            }
+                            else
+                            {
+                                errorCode = error.Error.HResult.ToString();
+                                }
+                            var errorObject = new ErrorErrorDetails(errorCode, error.Error.Message);
 
                             context.Response.ContentType = executionContext.GetResponseContentType(context);
                             await context.Response.WriteAsync(JsonConvert.SerializeObject(errorObject)).ConfigureAwait(false);
